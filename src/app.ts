@@ -9,6 +9,9 @@ import logger from './utils/logger';
 import authRoutes from './routes/auth.routes';
 import appointmentRoutes from './routes/appointment.routes';
 import webhookRoutes from './routes/webhook.routes';
+import serviceRoutes from './routes/service.routes';
+import customerRoutes from './routes/customer.routes';
+import employeeRoutes from './routes/employee.routes';
 
 validateConfig();
 
@@ -36,6 +39,9 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/webhook', webhookRoutes);
+app.use('/api/services', serviceRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/api/employees', employeeRoutes);
 
 app.use(errorHandler);
 

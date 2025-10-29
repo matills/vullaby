@@ -13,6 +13,8 @@ interface CreateServiceData {
 export class ServiceService {
   async createService(data: CreateServiceData) {
     try {
+      logger.info('Creating service:', { businessId: data.businessId, name: data.name });
+
       const { data: service, error } = await supabase
         .from('services')
         .insert({
@@ -26,7 +28,12 @@ export class ServiceService {
         .select()
         .single();
 
-      if (error || !service) {
+      if (error) {
+        logger.error('Supabase error creating service:', error);
+        throw new AppError(error.message || 'Failed to create service', 500);
+      }
+
+      if (!service) {
         throw new AppError('Failed to create service', 500);
       }
 
@@ -44,9 +51,11 @@ export class ServiceService {
       .from('services')
       .select('*')
       .eq('business_id', businessId)
+      .eq('is_active', true)
       .order('name');
 
     if (error) {
+      logger.error('Error fetching services:', error);
       throw new AppError('Failed to fetch services', 500);
     }
 
@@ -77,7 +86,7 @@ export class ServiceService {
     if (updates.name) updateData.name = updates.name;
     if (updates.description !== undefined) updateData.description = updates.description;
     if (updates.durationMinutes) updateData.duration_minutes = updates.durationMinutes;
-    if (updates.price) updateData.price = updates.price;
+    if (updates.price !== undefined) updateData.price = updates.price;
 
     const { data, error } = await supabase
       .from('services')
@@ -88,6 +97,7 @@ export class ServiceService {
       .single();
 
     if (error || !data) {
+      logger.error('Error updating service:', error);
       throw new AppError('Failed to update service', 500);
     }
 
@@ -105,6 +115,7 @@ export class ServiceService {
       .single();
 
     if (error || !data) {
+      logger.error('Error deleting service:', error);
       throw new AppError('Failed to delete service', 500);
     }
 
