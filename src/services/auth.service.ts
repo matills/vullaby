@@ -24,9 +24,27 @@ export class AuthService {
 
     let userId: string | null = null;
     let businessId: string | null = null;
+    let employeeId: string | null = null;
 
     try {
-      // 1. Crear usuario en auth
+      const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
+      const userExists = existingUser?.users.find(u => u.email === data.email);
+
+      if (userExists) {
+        const { data: existingEmployee } = await supabaseAdmin
+          .from('employees')
+          .select('id')
+          .eq('email', data.email)
+          .single();
+
+        if (!existingEmployee) {
+          logger.info(`Cleaning up orphaned user: ${userExists.id}`);
+          await supabaseAdmin.auth.admin.deleteUser(userExists.id);
+        } else {
+          throw new AppError('A user with this email address has already been registered', 400);
+        }
+      }
+
       const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email: data.email,
         password: data.password,
@@ -47,8 +65,8 @@ export class AuthService {
       }
 
       userId = authData.user.id;
+      logger.info(`User created: ${userId}`);
 
-      // 2. Crear business (usando admin para bypassear RLS)
       const { data: business, error: businessError } = await supabaseAdmin
         .from('businesses')
         .insert([{
@@ -70,8 +88,8 @@ export class AuthService {
       }
 
       businessId = business.id;
+      logger.info(`Business created: ${businessId}`);
 
-      // 3. Crear employee (usando admin para bypassear RLS)
       const { data: employee, error: employeeError } = await supabaseAdmin
         .from('employees')
         .insert([{
@@ -94,7 +112,9 @@ export class AuthService {
         throw new AppError('Failed to create employee', 500);
       }
 
-      // 4. Actualizar metadata del usuario
+      employeeId = employee.id;
+      logger.info(`Employee created: ${employeeId}`);
+
       const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
         user_metadata: {
           business_id: business.id,
@@ -105,34 +125,29 @@ export class AuthService {
 
       if (updateError) {
         logger.warn('Failed to update user metadata:', updateError);
+      } else {
+        logger.info(`User metadata updated for: ${userId}`);
       }
 
-      // 5. Crear sesión para el usuario
-      const { data: sessionData, error: sessionError } = await supabase.auth.signInWithPassword({
-        email: data.email,
-        password: data.password,
-      });
-
-      if (sessionError) {
-        logger.warn('Failed to create session:', sessionError);
-      }
-
-      logger.info(`New business registered: ${business.id}`);
+      logger.info(`Registration complete for: ${data.email}`);
 
       return {
         user: authData.user,
-        session: sessionData?.session || null,
+        session: null,
         business,
         employee,
+        message: 'Registration successful. Please login with your credentials.',
       };
     } catch (error) {
       logger.error('Registration error:', error);
 
-      // Rollback
-      if (businessId) {
+      if (employeeId || businessId) {
         try {
-          await supabaseAdmin.from('businesses').delete().eq('id', businessId);
-          logger.info(`Rolled back business: ${businessId}`);
+          if (businessId) {
+            await supabaseAdmin.from('employees').delete().eq('business_id', businessId);
+            await supabaseAdmin.from('businesses').delete().eq('id', businessId);
+            logger.info(`Rolled back business: ${businessId}`);
+          }
         } catch (rollbackError) {
           logger.error('Failed to rollback business:', rollbackError);
         }
@@ -154,20 +169,48 @@ export class AuthService {
 
   async login(data: LoginData) {
     try {
-      const { data: authData, error } = await supabase.auth.signInWithPassword({
+      logger.info(`Login attempt for: ${data.email}`);
+
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
       });
 
-      if (error || !authData.user) {
+      if (authError) {
+        logger.error('Supabase auth error:', {
+          message: authError.message,
+          status: authError.status,
+          name: authError.name,
+        });
         throw new AppError('Invalid credentials', 401);
       }
 
-      const { data: employee } = await supabase
+      if (!authData.user) {
+        logger.error('No user returned from Supabase');
+        throw new AppError('Invalid credentials', 401);
+      }
+
+      logger.info(`User authenticated: ${authData.user.id}`);
+
+      const { data: employee, error: employeeError } = await supabase
         .from('employees')
         .select('*, business:businesses(*)')
         .eq('email', data.email)
         .single();
+
+      if (employeeError) {
+        logger.error('Employee fetch error:', {
+          code: employeeError.code,
+          message: employeeError.message,
+          details: employeeError.details,
+        });
+      }
+
+      if (!employee) {
+        logger.warn(`User ${data.email} authenticated but no employee record found`);
+      } else {
+        logger.info(`Employee found: ${employee.id}`);
+      }
 
       return {
         user: authData.user,

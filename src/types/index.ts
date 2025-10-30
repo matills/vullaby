@@ -76,6 +76,7 @@ export interface TimeSlot {
 
 export interface WhatsAppMessage {
   from: string;
+  to: string; 
   body: string;
   business_id?: string;
 }

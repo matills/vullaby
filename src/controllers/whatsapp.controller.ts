@@ -7,29 +7,44 @@ const whatsappService = new WhatsAppService();
 export class WhatsAppController {
   async webhook(req: Request, res: Response, next: NextFunction) {
     try {
-      const { From, Body } = req.body;
+      logger.info('Webhook received:', req.body);
 
-      if (!From || !Body) {
-        return res.status(400).send('Invalid request');
+      const { From, To, Body, ProfileName } = req.body;
+
+      if (!From || !To || !Body) {
+        logger.warn('Invalid webhook payload:', req.body);
+        return res.status(200).send('OK');
       }
 
-      logger.info(`Received WhatsApp message from ${From}: ${Body}`);
+      logger.info(`WhatsApp message from ${From} (${ProfileName}): ${Body}`);
+
+      // Limpiar el prefijo "whatsapp:" de ambos números
+      const cleanFrom = From.replace('whatsapp:', '');
+      const cleanTo = To.replace('whatsapp:', '');
 
       await whatsappService.handleIncomingMessage({
-        from: From,
+        from: cleanFrom,
+        to: cleanTo,
         body: Body,
       });
 
       res.status(200).send('OK');
     } catch (error) {
       logger.error('Webhook error:', error);
-      next(error);
+      res.status(200).send('OK');
     }
   }
 
   async sendTestMessage(req: Request, res: Response, next: NextFunction) {
     try {
       const { phone, message } = req.body;
+
+      if (!phone || !message) {
+        return res.status(400).json({
+          success: false,
+          error: 'Phone and message are required',
+        });
+      }
       
       const result = await whatsappService.sendMessage(phone, message);
 
