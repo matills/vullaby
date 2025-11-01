@@ -1,16 +1,27 @@
-import twilio from 'twilio';
+import twilio, { Twilio } from 'twilio';
 import { config } from './env';
+import logger from '../utils/logger';
 
-const accountSid = config.twilio.accountSid;
-const authToken = config.twilio.authToken;
+const createTwilioClient = (): Twilio | null => {
+  const { accountSid, authToken } = config.twilio;
 
-let twilioClient: twilio.Twilio | null = null;
+  if (!accountSid || !authToken) {
+    logger.warn('Twilio credentials not configured. WhatsApp features will be disabled.');
+    return null;
+  }
 
-if (accountSid && authToken && accountSid.startsWith('AC')) {
-  twilioClient = twilio(accountSid, authToken);
-} else {
-  console.warn('Twilio credentials not configured. WhatsApp features will be disabled.');
-}
+  if (!accountSid.startsWith('AC')) {
+    logger.warn('Invalid Twilio Account SID format. WhatsApp features will be disabled.');
+    return null;
+  }
 
-export { twilioClient };
+  try {
+    return twilio(accountSid, authToken);
+  } catch (error) {
+    logger.error('Failed to initialize Twilio client:', error);
+    return null;
+  }
+};
+
+export const twilioClient = createTwilioClient();
 export const client = twilioClient;

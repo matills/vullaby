@@ -28,8 +28,14 @@ export const resetPasswordSchema = z.object({
   }),
 });
 
+export const refreshTokenSchema = z.object({
+  body: z.object({
+    refreshToken: z.string(),
+  }),
+});
+
 export class AuthController {
-  async register(req: Request, res: Response, next: NextFunction) {
+  async register(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const result = await authService.registerBusiness(req.body);
       res.status(201).json({
@@ -41,7 +47,7 @@ export class AuthController {
     }
   }
 
-  async login(req: Request, res: Response, next: NextFunction) {
+  async login(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const result = await authService.login(req.body);
       res.json({
@@ -53,7 +59,7 @@ export class AuthController {
     }
   }
 
-  async logout(req: Request, res: Response, next: NextFunction) {
+  async logout(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const token = req.headers.authorization?.substring(7) || '';
       await authService.logout(token);
@@ -66,7 +72,7 @@ export class AuthController {
     }
   }
 
-  async refreshToken(req: Request, res: Response, next: NextFunction) {
+  async refreshToken(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { refreshToken } = req.body;
       const session = await authService.refreshToken(refreshToken);
@@ -79,7 +85,7 @@ export class AuthController {
     }
   }
 
-  async resetPassword(req: Request, res: Response, next: NextFunction) {
+  async resetPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       await authService.resetPassword(req.body.email);
       res.json({

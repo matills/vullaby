@@ -24,14 +24,11 @@ export const updateCustomerSchema = z.object({
 });
 
 export class CustomerController {
-  async create(req: AuthRequest, res: Response, next: NextFunction) {
+  async create(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const customer = await customerService.createCustomer({
         businessId: req.user!.businessId,
-        name: req.body.name,
-        phone: req.body.phone,
-        email: req.body.email,
-        notes: req.body.notes,
+        ...req.body,
       });
 
       res.status(201).json({
@@ -43,7 +40,7 @@ export class CustomerController {
     }
   }
 
-  async getAll(req: AuthRequest, res: Response, next: NextFunction) {
+  async getAll(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const search = req.query.search as string | undefined;
       const customers = await customerService.getCustomersByBusiness(
@@ -60,7 +57,7 @@ export class CustomerController {
     }
   }
 
-  async getById(req: AuthRequest, res: Response, next: NextFunction) {
+  async getById(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const customer = await customerService.getCustomerById(
         req.params.id,
@@ -76,7 +73,7 @@ export class CustomerController {
     }
   }
 
-  async update(req: AuthRequest, res: Response, next: NextFunction) {
+  async update(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const customer = await customerService.updateCustomer(
         req.params.id,
@@ -93,7 +90,7 @@ export class CustomerController {
     }
   }
 
-  async delete(req: AuthRequest, res: Response, next: NextFunction) {
+  async delete(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       await customerService.deleteCustomer(
         req.params.id,
@@ -109,7 +106,7 @@ export class CustomerController {
     }
   }
 
-  async getAppointments(req: AuthRequest, res: Response, next: NextFunction) {
+  async getAppointments(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const appointments = await customerService.getCustomerAppointments(
         req.params.id,

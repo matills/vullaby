@@ -32,15 +32,18 @@ export const setWorkingHoursSchema = z.object({
   }),
 });
 
+export const toggleStatusSchema = z.object({
+  body: z.object({
+    isActive: z.boolean(),
+  }),
+});
+
 export class EmployeeController {
-  async create(req: AuthRequest, res: Response, next: NextFunction) {
+  async create(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const employee = await employeeService.createEmployee({
         businessId: req.user!.businessId,
-        name: req.body.name,
-        email: req.body.email,
-        phone: req.body.phone,
-        role: req.body.role,
+        ...req.body,
       });
 
       res.status(201).json({
@@ -52,7 +55,7 @@ export class EmployeeController {
     }
   }
 
-  async getAll(req: AuthRequest, res: Response, next: NextFunction) {
+  async getAll(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const employees = await employeeService.getEmployeesByBusiness(
         req.user!.businessId
@@ -67,7 +70,7 @@ export class EmployeeController {
     }
   }
 
-  async getById(req: AuthRequest, res: Response, next: NextFunction) {
+  async getById(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const employee = await employeeService.getEmployeeById(
         req.params.id,
@@ -83,7 +86,7 @@ export class EmployeeController {
     }
   }
 
-  async update(req: AuthRequest, res: Response, next: NextFunction) {
+  async update(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const employee = await employeeService.updateEmployee(
         req.params.id,
@@ -100,7 +103,7 @@ export class EmployeeController {
     }
   }
 
-  async toggleStatus(req: AuthRequest, res: Response, next: NextFunction) {
+  async toggleStatus(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const { isActive } = req.body;
       const employee = await employeeService.toggleEmployeeStatus(
@@ -118,7 +121,7 @@ export class EmployeeController {
     }
   }
 
-  async delete(req: AuthRequest, res: Response, next: NextFunction) {
+  async delete(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       await employeeService.deleteEmployee(
         req.params.id,
@@ -134,14 +137,11 @@ export class EmployeeController {
     }
   }
 
-  async setWorkingHours(req: AuthRequest, res: Response, next: NextFunction) {
+  async setWorkingHours(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const workingHours = await employeeService.setWorkingHours({
         employeeId: req.params.id,
-        dayOfWeek: req.body.dayOfWeek,
-        startTime: req.body.startTime,
-        endTime: req.body.endTime,
-        isAvailable: req.body.isAvailable,
+        ...req.body,
       });
 
       res.json({
@@ -153,7 +153,7 @@ export class EmployeeController {
     }
   }
 
-  async getWorkingHours(req: AuthRequest, res: Response, next: NextFunction) {
+  async getWorkingHours(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const workingHours = await employeeService.getWorkingHours(
         req.params.id

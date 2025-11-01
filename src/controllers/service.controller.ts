@@ -24,14 +24,11 @@ export const updateServiceSchema = z.object({
 });
 
 export class ServiceController {
-  async create(req: AuthRequest, res: Response, next: NextFunction) {
+  async create(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const service = await serviceService.createService({
         businessId: req.user!.businessId,
-        name: req.body.name,
-        description: req.body.description,
-        durationMinutes: req.body.durationMinutes,
-        price: req.body.price,
+        ...req.body,
       });
 
       res.status(201).json({
@@ -43,7 +40,7 @@ export class ServiceController {
     }
   }
 
-  async getAll(req: AuthRequest, res: Response, next: NextFunction) {
+  async getAll(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const services = await serviceService.getServicesByBusiness(
         req.user!.businessId
@@ -58,7 +55,7 @@ export class ServiceController {
     }
   }
 
-  async getById(req: AuthRequest, res: Response, next: NextFunction) {
+  async getById(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const service = await serviceService.getServiceById(
         req.params.id,
@@ -74,7 +71,7 @@ export class ServiceController {
     }
   }
 
-  async update(req: AuthRequest, res: Response, next: NextFunction) {
+  async update(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const service = await serviceService.updateService(
         req.params.id,
@@ -91,7 +88,7 @@ export class ServiceController {
     }
   }
 
-  async delete(req: AuthRequest, res: Response, next: NextFunction) {
+  async delete(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const service = await serviceService.deleteService(
         req.params.id,

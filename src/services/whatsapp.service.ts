@@ -3,12 +3,14 @@ import { config } from '../config/env';
 import { supabaseAdmin } from '../config/database';
 import { AppError } from '../middlewares/error.middleware';
 import { WhatsAppMessage, TimeSlot } from '../types';
-import { format, addMinutes } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import logger from '../utils/logger';
 
+type ConversationState = 'idle' | 'awaiting_service' | 'awaiting_slot' | 'awaiting_cancellation';
+
 interface ConversationContext {
-  state: 'idle' | 'awaiting_service' | 'awaiting_slot' | 'awaiting_cancellation';
+  state: ConversationState;
   businessId?: string;
   customerId?: string;
   selectedServiceId?: string;
@@ -39,20 +41,23 @@ class PhoneFormatter {
 
   static generatePatterns(phone: string): string[] {
     const normalized = this.normalize(phone);
-    
-    return [
+    const patterns = new Set([
       phone,
       `+${normalized}`,
       normalized,
-      `+549${normalized.replace(/^549/, '')}`,
-      `549${normalized.replace(/^549/, '')}`,
-      normalized.replace(/^549/, ''),
-    ];
+    ]);
+
+    const withoutPrefix = normalized.replace(/^549/, '');
+    patterns.add(`+549${withoutPrefix}`);
+    patterns.add(`549${withoutPrefix}`);
+    patterns.add(withoutPrefix);
+
+    return Array.from(patterns);
   }
 }
 
 class ConversationManager {
-  private contexts: Map<string, ConversationContext> = new Map();
+  private contexts = new Map<string, ConversationContext>();
 
   get(phone: string): ConversationContext {
     const normalized = PhoneFormatter.normalize(phone);
@@ -77,7 +82,7 @@ class BusinessResolver {
   async findByPhone(toNumber: string): Promise<any> {
     const cleanedNumber = toNumber.replace('whatsapp:', '').trim();
     
-    logger.info(`🔍 Looking for business with phone: ${cleanedNumber}`);
+    logger.info(`Looking for business with phone: ${cleanedNumber}`);
 
     const { data: business } = await supabaseAdmin
       .from('businesses')
@@ -86,13 +91,12 @@ class BusinessResolver {
       .maybeSingle();
 
     if (business) {
-      logger.info(`✅ Business found: ${business.name} (${business.id})`);
+      logger.info(`Business found: ${business.name}`);
       return business;
     }
 
     const patterns = PhoneFormatter.generatePatterns(cleanedNumber);
-    logger.info(`🔄 Trying additional patterns:`, patterns);
-
+    
     for (const pattern of patterns) {
       const { data: businessByPattern } = await supabaseAdmin
         .from('businesses')
@@ -101,12 +105,12 @@ class BusinessResolver {
         .maybeSingle();
 
       if (businessByPattern) {
-        logger.info(`✅ Business found with pattern ${pattern}: ${businessByPattern.name}`);
+        logger.info(`Business found with pattern ${pattern}: ${businessByPattern.name}`);
         return businessByPattern;
       }
     }
 
-    logger.warn(`❌ No business found for phone: ${toNumber}`);
+    logger.warn(`No business found for phone: ${toNumber}`);
     return null;
   }
 }
@@ -124,12 +128,12 @@ class CustomerManager {
         .maybeSingle();
 
       if (data) {
-        logger.info(`✅ Customer found: ${data.name} (${data.id})`);
+        logger.info(`Customer found: ${data.name}`);
         return data;
       }
     }
 
-    logger.info(`➕ Creating new customer for: ${normalizedPhone}`);
+    logger.info(`Creating new customer for: ${normalizedPhone}`);
     const { data: newCustomer, error } = await supabaseAdmin
       .from('customers')
       .insert({
@@ -142,11 +146,11 @@ class CustomerManager {
       .single();
 
     if (error || !newCustomer) {
-      logger.error('❌ Error creating customer:', error);
+      logger.error('Error creating customer:', error);
       throw new Error('Failed to create customer');
     }
 
-    logger.info(`✅ New customer created: ${newCustomer.id}`);
+    logger.info(`New customer created: ${newCustomer.id}`);
     return newCustomer;
   }
 }
@@ -159,12 +163,8 @@ export class WhatsAppService {
   async sendMessage(to: string, message: string) {
     try {
       if (!twilioClient) {
-        logger.warn('⚠️ WhatsApp service not configured - message not sent');
-        return {
-          sid: 'mock-sid',
-          status: 'mock',
-          message: 'WhatsApp not configured',
-        };
+        logger.warn('WhatsApp service not configured - message not sent');
+        return { sid: 'mock-sid', status: 'mock', message: 'WhatsApp not configured' };
       }
 
       if (!config.twilio.whatsappNumber) {
@@ -176,7 +176,7 @@ export class WhatsAppService {
         ? config.twilio.whatsappNumber
         : `whatsapp:${config.twilio.whatsappNumber}`;
 
-      logger.info(`📤 Sending WhatsApp from ${formattedFrom} to ${formattedTo}`);
+      logger.info(`Sending WhatsApp from ${formattedFrom} to ${formattedTo}`);
 
       const result = await twilioClient.messages.create({
         from: formattedFrom,
@@ -184,79 +184,44 @@ export class WhatsAppService {
         body: message,
       });
 
-      logger.info(`✅ WhatsApp message sent: ${result.sid}`);
+      logger.info(`WhatsApp message sent: ${result.sid}`);
       return result;
     } catch (error: any) {
-      logger.error('❌ Failed to send WhatsApp message:', {
+      logger.error('Failed to send WhatsApp message:', {
         code: error.code,
-        status: error.status,
         message: error.message,
-        moreInfo: error.moreInfo,
       });
 
       if (error.code === 63007) {
-        throw new AppError(
-          'WhatsApp sender not configured. Please verify your Twilio WhatsApp sandbox or production number.',
-          503
-        );
+        throw new AppError('WhatsApp sender not configured properly', 503);
       }
 
       throw new AppError(`Failed to send message: ${error.message}`, 500);
     }
   }
 
-  async sendAppointmentConfirmation(
-    phone: string,
-    appointmentData: {
-      customerName: string;
-      serviceName: string;
-      employeeName: string;
-      startTime: Date;
-      businessName: string;
-    }
-  ) {
-    const dateStr = format(appointmentData.startTime, "EEEE d 'de' MMMM", { locale: es });
-    const timeStr = format(appointmentData.startTime, 'HH:mm');
+  async sendAppointmentConfirmation(phone: string, data: {
+    customerName: string;
+    serviceName: string;
+    employeeName: string;
+    startTime: Date;
+    businessName: string;
+  }) {
+    const dateStr = format(data.startTime, "EEEE d 'de' MMMM", { locale: es });
+    const timeStr = format(data.startTime, 'HH:mm');
 
-    const message = `¡Hola ${appointmentData.customerName}! ✅
+    const message = `¡Hola ${data.customerName}! ✅
 
 Tu turno ha sido confirmado:
 
 📅 ${dateStr}
 🕐 ${timeStr}
-💈 ${appointmentData.serviceName}
-👤 con ${appointmentData.employeeName}
+💈 ${data.serviceName}
+👤 con ${data.employeeName}
 
-📍 ${appointmentData.businessName}
+📍 ${data.businessName}
 
 Si necesitas cancelar o reprogramar, responde a este mensaje.`;
-
-    return this.sendMessage(phone, message);
-  }
-
-  async sendAppointmentReminder(
-    phone: string,
-    appointmentData: {
-      customerName: string;
-      serviceName: string;
-      startTime: Date;
-      businessName: string;
-    }
-  ) {
-    const dateStr = format(appointmentData.startTime, "EEEE d 'de' MMMM", { locale: es });
-    const timeStr = format(appointmentData.startTime, 'HH:mm');
-
-    const message = `Hola ${appointmentData.customerName} 👋
-
-Te recordamos tu turno para mañana:
-
-📅 ${dateStr}
-🕐 ${timeStr}
-💈 ${appointmentData.serviceName}
-
-📍 ${appointmentData.businessName}
-
-¡Te esperamos!`;
 
     return this.sendMessage(phone, message);
   }
@@ -267,11 +232,11 @@ Te recordamos tu turno para mañana:
       const messageBody = message.body.toLowerCase().trim();
       const context = this.conversationManager.get(normalizedPhone);
 
-      logger.info(`📨 Processing message from: ${normalizedPhone}, State: ${context.state}`);
+      logger.info(`Processing message from: ${normalizedPhone}, State: ${context.state}`);
 
       const business = await this.businessResolver.findByPhone(message.to);
       if (!business) {
-        logger.warn(`⚠️ No business configured for number: ${message.to}`);
+        logger.warn(`No business configured for number: ${message.to}`);
         return;
       }
 
@@ -279,17 +244,16 @@ Te recordamos tu turno para mañana:
       context.businessId = business.id;
       context.customerId = customer.id;
 
-      if (context.state === 'awaiting_service') {
-        await this.handleServiceSelection(normalizedPhone, messageBody, context, business);
-      } else if (context.state === 'awaiting_slot') {
-        await this.handleSlotSelection(normalizedPhone, messageBody, context, customer, business);
-      } else if (context.state === 'awaiting_cancellation') {
-        await this.handleCancellationSelection(normalizedPhone, messageBody, context);
-      } else {
-        await this.handleInitialMessage(normalizedPhone, messageBody, context, customer, business);
-      }
+      const handlers: Record<ConversationState, () => Promise<void>> = {
+        awaiting_service: () => this.handleServiceSelection(normalizedPhone, messageBody, context, business),
+        awaiting_slot: () => this.handleSlotSelection(normalizedPhone, messageBody, context, customer, business),
+        awaiting_cancellation: () => this.handleCancellationSelection(normalizedPhone, messageBody, context),
+        idle: () => this.handleInitialMessage(normalizedPhone, messageBody, context, customer, business),
+      };
+
+      await handlers[context.state]();
     } catch (error) {
-      logger.error('❌ Error handling incoming message:', error);
+      logger.error('Error handling incoming message:', error);
       await this.sendMessage(message.from, 'Disculpa, ocurrió un error. Por favor intenta más tarde.');
     }
   }
@@ -301,15 +265,27 @@ Te recordamos tu turno para mañana:
     customer: any,
     business: any
   ) {
-    if (messageBody.includes('turno') || messageBody.includes('reserva') || messageBody.includes('agendar')) {
-      await this.startAppointmentFlow(phone, context, business);
-    } else if (messageBody.includes('cancelar')) {
-      await this.startCancellationFlow(phone, context, customer.id, business.id);
-    } else if (messageBody.includes('horarios') || messageBody.includes('disponibilidad')) {
-      await this.sendMessage(phone, `Para consultar disponibilidad, escribe "agendar turno" y te mostraré los horarios disponibles. 📅`);
-    } else {
-      await this.sendWelcomeMessage(phone, business.name);
+    const actions: Record<string, () => Promise<void>> = {
+      turno: () => this.startAppointmentFlow(phone, context, business),
+      reserva: () => this.startAppointmentFlow(phone, context, business),
+      agendar: () => this.startAppointmentFlow(phone, context, business),
+      cancelar: () => this.startCancellationFlow(phone, context, customer.id, business.id),
+      horarios: () => this.sendAvailabilityMessage(phone),
+      disponibilidad: () => this.sendAvailabilityMessage(phone),
+    };
+
+    for (const [keyword, action] of Object.entries(actions)) {
+      if (messageBody.includes(keyword)) {
+        await action();
+        return;
+      }
     }
+
+    await this.sendWelcomeMessage(phone, business.name);
+  }
+
+  private async sendAvailabilityMessage(phone: string) {
+    await this.sendMessage(phone, 'Para consultar disponibilidad, escribe "agendar turno" y te mostraré los horarios disponibles. 📅');
   }
 
   private async startAppointmentFlow(phone: string, context: ConversationContext, business: any) {
@@ -327,21 +303,19 @@ Te recordamos tu turno para mañana:
       }
 
       const servicesList = services
-        .map((service, index) => `${index + 1}. ${service.name} - $${service.price} (${service.duration_minutes} min)`)
+        .map((service, index) => 
+          `${index + 1}. ${service.name} - $${service.price} (${service.duration_minutes} min)`
+        )
         .join('\n');
 
-      const message = `¡Perfecto! Elige un servicio:
-
-${servicesList}
-
-Responde con el número del servicio (ejemplo: 1)`;
+      const message = `¡Perfecto! Elige un servicio:\n\n${servicesList}\n\nResponde con el número del servicio (ejemplo: 1)`;
 
       context.state = 'awaiting_service';
       this.conversationManager.set(phone, context);
 
       await this.sendMessage(phone, message);
     } catch (error) {
-      logger.error('❌ Error in startAppointmentFlow:', error);
+      logger.error('Error in startAppointmentFlow:', error);
       await this.sendMessage(phone, 'Disculpa, ocurrió un error. Por favor intenta más tarde.');
     }
   }
@@ -379,9 +353,7 @@ Responde con el número del servicio (ejemplo: 1)`;
     this.conversationManager.set(phone, context);
 
     if (slots.length === 0) {
-      await this.sendMessage(phone, `Lo siento, no hay horarios disponibles hoy para ${selectedService.name}.
-
-Escribe "turno" para intentar otro día.`);
+      await this.sendMessage(phone, `Lo siento, no hay horarios disponibles hoy para ${selectedService.name}.\n\nEscribe "turno" para intentar otro día.`);
       this.conversationManager.reset(phone);
       return;
     }
@@ -391,13 +363,7 @@ Escribe "turno" para intentar otro día.`);
       .map((slot, index) => `${index + 1}. ${format(slot.start, 'HH:mm')}`)
       .join('\n');
 
-    const message = `Horarios disponibles hoy para ${selectedService.name}:
-
-${slotsList}
-
-Responde con el número del horario (ejemplo: 1)`;
-
-    await this.sendMessage(phone, message);
+    await this.sendMessage(phone, `Horarios disponibles hoy para ${selectedService.name}:\n\n${slotsList}\n\nResponde con el número del horario (ejemplo: 1)`);
   }
 
   private async handleSlotSelection(
@@ -450,7 +416,7 @@ Responde con el número del horario (ejemplo: 1)`;
         .single();
 
       if (error) {
-        logger.error('❌ Error creating appointment:', error);
+        logger.error('Error creating appointment:', error);
         throw error;
       }
 
@@ -464,7 +430,7 @@ Responde con el número del horario (ejemplo: 1)`;
 
       this.conversationManager.reset(phone);
     } catch (error) {
-      logger.error('❌ Error creating appointment:', error);
+      logger.error('Error creating appointment:', error);
       await this.sendMessage(phone, 'Disculpa, no pude confirmar el turno. Por favor intenta nuevamente.');
     }
   }
@@ -472,7 +438,7 @@ Responde con el número del horario (ejemplo: 1)`;
   private async generateAvailableSlots(businessId: string, service: any): Promise<TimeSlot[]> {
     const slots: TimeSlot[] = [];
     const now = new Date();
-    let currentTime = new Date();
+    const currentTime = new Date();
     currentTime.setHours(9, 0, 0, 0);
 
     const endTime = new Date();
@@ -489,20 +455,21 @@ Responde con el número del horario (ejemplo: 1)`;
         });
       }
 
-      currentTime = slotEnd;
+      currentTime.setTime(slotEnd.getTime());
     }
 
     return slots;
   }
 
-  private async startCancellationFlow(phone: string, context: ConversationContext, customerId: string, businessId: string) {
+  private async startCancellationFlow(
+    phone: string,
+    context: ConversationContext,
+    customerId: string,
+    businessId: string
+  ) {
     const { data: appointments } = await supabaseAdmin
       .from('appointments')
-      .select(`
-        *,
-        service:services(name),
-        employee:employees(name)
-      `)
+      .select('*, service:services(name), employee:employees(name)')
       .eq('customer_id', customerId)
       .eq('business_id', businessId)
       .in('status', ['pending', 'confirmed'])
@@ -525,13 +492,7 @@ Responde con el número del horario (ejemplo: 1)`;
       })
       .join('\n');
 
-    const message = `Tus próximos turnos:
-
-${appointmentsList}
-
-Responde con el número del turno a cancelar (ejemplo: 1)`;
-
-    await this.sendMessage(phone, message);
+    await this.sendMessage(phone, `Tus próximos turnos:\n\n${appointmentsList}\n\nResponde con el número del turno a cancelar (ejemplo: 1)`);
   }
 
   private async handleCancellationSelection(phone: string, messageBody: string, context: ConversationContext) {
@@ -552,11 +513,12 @@ Responde con el número del turno a cancelar (ejemplo: 1)`;
 
       if (error) throw error;
 
-      await this.sendMessage(phone, `✅ Tu turno del ${format(new Date(appointmentToCancel.start_time), "d 'de' MMMM 'a las' HH:mm", { locale: es })} ha sido cancelado exitosamente.`);
+      const dateStr = format(new Date(appointmentToCancel.start_time), "d 'de' MMMM 'a las' HH:mm", { locale: es });
+      await this.sendMessage(phone, `✅ Tu turno del ${dateStr} ha sido cancelado exitosamente.`);
 
       this.conversationManager.reset(phone);
     } catch (error) {
-      logger.error('❌ Error cancelling appointment:', error);
+      logger.error('Error cancelling appointment:', error);
       await this.sendMessage(phone, 'Disculpa, no pude cancelar el turno. Por favor intenta nuevamente.');
     }
   }
@@ -571,15 +533,5 @@ Puedo ayudarte con:
 ¿Qué necesitas?`;
 
     await this.sendMessage(phone, message);
-  }
-
-  async sendCancellationConfirmation(phone: string, customerName: string) {
-    const message = `Hola ${customerName},
-
-Tu turno ha sido cancelado exitosamente.
-
-Si deseas agendar otro turno, escribe "turno".`;
-
-    return this.sendMessage(phone, message);
   }
 }

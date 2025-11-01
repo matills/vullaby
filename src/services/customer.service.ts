@@ -1,5 +1,5 @@
 import { supabase } from '../config/database';
-import { AppError } from '../middlewares/error.middleware';
+import { AppError, NotFoundError, ConflictError } from '../middlewares/error.middleware';
 import logger from '../utils/logger';
 
 interface CreateCustomerData {
@@ -10,19 +10,31 @@ interface CreateCustomerData {
   notes?: string;
 }
 
+type UpdateCustomerData = Partial<Omit<CreateCustomerData, 'businessId'>>;
+
+const APPOINTMENTS_SELECT_QUERY = `
+  *,
+  employee:employees(*),
+  service:services(*)
+`;
+
 export class CustomerService {
+  private async checkDuplicatePhone(businessId: string, phone: string): Promise<void> {
+    const { data: existing } = await supabase
+      .from('customers')
+      .select('id')
+      .eq('business_id', businessId)
+      .eq('phone', phone)
+      .single();
+
+    if (existing) {
+      throw new ConflictError('Customer with this phone already exists');
+    }
+  }
+
   async createCustomer(data: CreateCustomerData) {
     try {
-      const { data: existing } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('business_id', data.businessId)
-        .eq('phone', data.phone)
-        .single();
-
-      if (existing) {
-        throw new AppError('Customer with this phone already exists', 409);
-      }
+      await this.checkDuplicatePhone(data.businessId, data.phone);
 
       const { data: customer, error } = await supabase
         .from('customers')
@@ -37,6 +49,7 @@ export class CustomerService {
         .single();
 
       if (error || !customer) {
+        logger.error('Failed to create customer:', error);
         throw new AppError('Failed to create customer', 500);
       }
 
@@ -53,15 +66,17 @@ export class CustomerService {
     let query = supabase
       .from('customers')
       .select('*')
-      .eq('business_id', businessId);
+      .eq('business_id', businessId)
+      .order('name');
 
     if (search) {
       query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
     }
 
-    const { data, error } = await query.order('name');
+    const { data, error } = await query;
 
     if (error) {
+      logger.error('Failed to fetch customers:', error);
       throw new AppError('Failed to fetch customers', 500);
     }
 
@@ -77,37 +92,34 @@ export class CustomerService {
       .single();
 
     if (error || !data) {
-      throw new AppError('Customer not found', 404);
+      throw new NotFoundError('Customer');
     }
 
     return data;
   }
 
   async getCustomerByPhone(phone: string, businessId: string) {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('customers')
       .select('*')
       .eq('business_id', businessId)
       .eq('phone', phone)
       .single();
 
-    if (error || !data) {
-      return null;
-    }
-
-    return data;
+    return data || null;
   }
 
-  async updateCustomer(
-    id: string,
-    businessId: string,
-    updates: Partial<CreateCustomerData>
-  ) {
-    const updateData: any = {};
+  async updateCustomer(id: string, businessId: string, updates: UpdateCustomerData) {
+    const updateData: Record<string, any> = {};
+    
     if (updates.name) updateData.name = updates.name;
     if (updates.phone) updateData.phone = updates.phone;
     if (updates.email !== undefined) updateData.email = updates.email;
     if (updates.notes !== undefined) updateData.notes = updates.notes;
+
+    if (Object.keys(updateData).length === 0) {
+      throw new AppError('No fields to update', 400);
+    }
 
     const { data, error } = await supabase
       .from('customers')
@@ -118,6 +130,7 @@ export class CustomerService {
       .single();
 
     if (error || !data) {
+      logger.error('Failed to update customer:', error);
       throw new AppError('Failed to update customer', 500);
     }
 
@@ -133,6 +146,7 @@ export class CustomerService {
       .eq('business_id', businessId);
 
     if (error) {
+      logger.error('Failed to delete customer:', error);
       throw new AppError('Failed to delete customer', 500);
     }
 
@@ -143,16 +157,13 @@ export class CustomerService {
   async getCustomerAppointments(customerId: string, businessId: string) {
     const { data, error } = await supabase
       .from('appointments')
-      .select(`
-        *,
-        employee:employees(*),
-        service:services(*)
-      `)
+      .select(APPOINTMENTS_SELECT_QUERY)
       .eq('customer_id', customerId)
       .eq('business_id', businessId)
       .order('start_time', { ascending: false });
 
     if (error) {
+      logger.error('Failed to fetch customer appointments:', error);
       throw new AppError('Failed to fetch customer appointments', 500);
     }
 

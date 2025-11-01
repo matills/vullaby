@@ -30,7 +30,7 @@ export const updateStatusSchema = z.object({
 });
 
 export class AppointmentController {
-  async create(req: AuthRequest, res: Response, next: NextFunction) {
+  async create(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const appointment = await appointmentService.createAppointment({
         businessId: req.user!.businessId,
@@ -50,7 +50,7 @@ export class AppointmentController {
     }
   }
 
-  async getAvailability(req: AuthRequest, res: Response, next: NextFunction) {
+  async getAvailability(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const slots = await appointmentService.getAvailableSlots({
         businessId: req.user!.businessId,
@@ -68,7 +68,7 @@ export class AppointmentController {
     }
   }
 
-  async getById(req: AuthRequest, res: Response, next: NextFunction) {
+  async getById(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const appointment = await appointmentService.getAppointmentById(
         req.params.id,
@@ -84,7 +84,7 @@ export class AppointmentController {
     }
   }
 
-  async getAll(req: AuthRequest, res: Response, next: NextFunction) {
+  async getAll(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const startDate = req.query.startDate
         ? new Date(req.query.startDate as string)
@@ -108,7 +108,7 @@ export class AppointmentController {
     }
   }
 
-  async updateStatus(req: AuthRequest, res: Response, next: NextFunction) {
+  async updateStatus(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const appointment = await appointmentService.updateAppointmentStatus(
         req.params.id,
@@ -125,7 +125,7 @@ export class AppointmentController {
     }
   }
 
-  async cancel(req: AuthRequest, res: Response, next: NextFunction) {
+  async cancel(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const appointment = await appointmentService.cancelAppointment(
         req.params.id,

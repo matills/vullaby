@@ -1,11 +1,20 @@
 import { Request, Response, NextFunction } from 'express';
 import { WhatsAppService } from '../services/whatsapp.service';
+import { ValidationError } from '../middlewares/error.middleware';
 import logger from '../utils/logger';
+import { z } from 'zod';
 
 const whatsappService = new WhatsAppService();
 
+export const sendTestMessageSchema = z.object({
+  body: z.object({
+    phone: z.string().min(10).max(20),
+    message: z.string().min(1),
+  }),
+});
+
 export class WhatsAppController {
-  async webhook(req: Request, res: Response, next: NextFunction) {
+  async webhook(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       logger.info('Webhook received:', req.body);
 
@@ -13,12 +22,12 @@ export class WhatsAppController {
 
       if (!From || !To || !Body) {
         logger.warn('Invalid webhook payload:', req.body);
-        return res.status(200).send('OK');
+        res.status(200).send('OK');
+        return;
       }
 
       logger.info(`WhatsApp message from ${From} (${ProfileName}): ${Body}`);
 
-      // Limpiar el prefijo "whatsapp:" de ambos números
       const cleanFrom = From.replace('whatsapp:', '');
       const cleanTo = To.replace('whatsapp:', '');
 
@@ -35,15 +44,12 @@ export class WhatsAppController {
     }
   }
 
-  async sendTestMessage(req: Request, res: Response, next: NextFunction) {
+  async sendTestMessage(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { phone, message } = req.body;
 
       if (!phone || !message) {
-        return res.status(400).json({
-          success: false,
-          error: 'Phone and message are required',
-        });
+        throw new ValidationError('Phone and message are required');
       }
       
       const result = await whatsappService.sendMessage(phone, message);

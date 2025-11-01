@@ -1,6 +1,6 @@
 import { supabase } from '../config/database';
-import { AppError } from '../middlewares/error.middleware';
-import { Appointment, TimeSlot } from '../types';
+import { AppError, NotFoundError, ConflictError } from '../middlewares/error.middleware';
+import { TimeSlot } from '../types';
 import { addMinutes, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { utcToZonedTime, zonedTimeToUtc } from 'date-fns-tz';
 import logger from '../utils/logger';
@@ -21,62 +21,36 @@ interface GetAvailabilityParams {
   serviceId: string;
 }
 
+const APPOINTMENT_SELECT_QUERY = `
+  *,
+  employee:employees(*),
+  customer:customers(*),
+  service:services(*)
+`;
+
 export class AppointmentService {
-  async createAppointment(data: CreateAppointmentData) {
-    try {
-      const { data: service } = await supabase
-        .from('services')
-        .select('duration_minutes')
-        .eq('id', data.serviceId)
-        .single();
+  private async getServiceDuration(serviceId: string): Promise<number> {
+    const { data: service, error } = await supabase
+      .from('services')
+      .select('duration_minutes')
+      .eq('id', serviceId)
+      .single();
 
-      if (!service) {
-        throw new AppError('Service not found', 404);
-      }
-
-      const endTime = addMinutes(data.startTime, service.duration_minutes);
-
-      const isAvailable = await this.checkAvailability(
-        data.employeeId,
-        data.startTime,
-        endTime
-      );
-
-      if (!isAvailable) {
-        throw new AppError('Time slot not available', 409);
-      }
-
-      const { data: appointment, error } = await supabase
-        .from('appointments')
-        .insert({
-          business_id: data.businessId,
-          employee_id: data.employeeId,
-          customer_id: data.customerId,
-          service_id: data.serviceId,
-          start_time: data.startTime.toISOString(),
-          end_time: endTime.toISOString(),
-          status: 'pending',
-          notes: data.notes,
-        })
-        .select(`
-          *,
-          employee:employees(*),
-          customer:customers(*),
-          service:services(*)
-        `)
-        .single();
-
-      if (error) {
-        throw new AppError('Failed to create appointment', 500);
-      }
-
-      logger.info(`Appointment created: ${appointment.id}`);
-      return appointment;
-    } catch (error) {
-      logger.error('Create appointment error:', error);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to create appointment', 500);
+    if (error || !service) {
+      throw new NotFoundError('Service');
     }
+
+    return service.duration_minutes;
+  }
+
+  private async getBusinessTimezone(businessId: string): Promise<string> {
+    const { data: business } = await supabase
+      .from('businesses')
+      .select('timezone')
+      .eq('id', businessId)
+      .single();
+
+    return business?.timezone || 'America/Argentina/Buenos_Aires';
   }
 
   async checkAvailability(
@@ -94,15 +68,53 @@ export class AppointmentService {
     return !conflicts || conflicts.length === 0;
   }
 
-  async getAvailableSlots(params: GetAvailabilityParams): Promise<TimeSlot[]> {
+  async createAppointment(data: CreateAppointmentData) {
     try {
-      const { data: business } = await supabase
-        .from('businesses')
-        .select('timezone')
-        .eq('id', params.businessId)
+      const durationMinutes = await this.getServiceDuration(data.serviceId);
+      const endTime = addMinutes(data.startTime, durationMinutes);
+
+      const isAvailable = await this.checkAvailability(
+        data.employeeId,
+        data.startTime,
+        endTime
+      );
+
+      if (!isAvailable) {
+        throw new ConflictError('Time slot not available');
+      }
+
+      const { data: appointment, error } = await supabase
+        .from('appointments')
+        .insert({
+          business_id: data.businessId,
+          employee_id: data.employeeId,
+          customer_id: data.customerId,
+          service_id: data.serviceId,
+          start_time: data.startTime.toISOString(),
+          end_time: endTime.toISOString(),
+          status: 'pending',
+          notes: data.notes,
+        })
+        .select(APPOINTMENT_SELECT_QUERY)
         .single();
 
-      const timezone = business?.timezone || 'America/Argentina/Buenos_Aires';
+      if (error) {
+        logger.error('Failed to create appointment:', error);
+        throw new AppError('Failed to create appointment', 500);
+      }
+
+      logger.info(`Appointment created: ${appointment.id}`);
+      return appointment;
+    } catch (error) {
+      logger.error('Create appointment error:', error);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to create appointment', 500);
+    }
+  }
+
+  async getAvailableSlots(params: GetAvailabilityParams): Promise<TimeSlot[]> {
+    try {
+      const timezone = await this.getBusinessTimezone(params.businessId);
       const zonedDate = utcToZonedTime(params.date, timezone);
 
       const { data: workingHours } = await supabase
@@ -117,15 +129,7 @@ export class AppointmentService {
         return [];
       }
 
-      const { data: service } = await supabase
-        .from('services')
-        .select('duration_minutes')
-        .eq('id', params.serviceId)
-        .single();
-
-      if (!service) {
-        throw new AppError('Service not found', 404);
-      }
+      const durationMinutes = await this.getServiceDuration(params.serviceId);
 
       const { data: appointments } = await supabase
         .from('appointments')
@@ -135,22 +139,43 @@ export class AppointmentService {
         .gte('start_time', startOfDay(zonedDate).toISOString())
         .lte('end_time', endOfDay(zonedDate).toISOString());
 
-      const slots: TimeSlot[] = [];
-      const [startHour, startMinute] = workingHours.start_time.split(':').map(Number);
-      const [endHour, endMinute] = workingHours.end_time.split(':').map(Number);
+      return this.generateTimeSlots(
+        zonedDate,
+        workingHours,
+        durationMinutes,
+        appointments || [],
+        timezone
+      );
+    } catch (error) {
+      logger.error('Get available slots error:', error);
+      throw new AppError('Failed to get available slots', 500);
+    }
+  }
 
-      let currentSlot = new Date(zonedDate);
-      currentSlot.setHours(startHour, startMinute, 0, 0);
+  private generateTimeSlots(
+    date: Date,
+    workingHours: any,
+    durationMinutes: number,
+    appointments: any[],
+    timezone: string
+  ): TimeSlot[] {
+    const slots: TimeSlot[] = [];
+    const [startHour, startMinute] = workingHours.start_time.split(':').map(Number);
+    const [endHour, endMinute] = workingHours.end_time.split(':').map(Number);
 
-      const dayEnd = new Date(zonedDate);
-      dayEnd.setHours(endHour, endMinute, 0, 0);
+    let currentSlot = new Date(date);
+    currentSlot.setHours(startHour, startMinute, 0, 0);
 
-      while (currentSlot < dayEnd) {
-        const slotEnd = addMinutes(currentSlot, service.duration_minutes);
+    const dayEnd = new Date(date);
+    dayEnd.setHours(endHour, endMinute, 0, 0);
 
-        if (slotEnd > dayEnd) break;
+    const SLOT_INTERVAL = 30;
 
-        const isOccupied = appointments?.some(apt => {
+    while (currentSlot < dayEnd) {
+      const slotEnd = addMinutes(currentSlot, durationMinutes);
+
+      if (slotEnd <= dayEnd) {
+        const isOccupied = appointments.some(apt => {
           const aptStart = parseISO(apt.start_time);
           const aptEnd = parseISO(apt.end_time);
           return currentSlot < aptEnd && slotEnd > aptStart;
@@ -161,32 +186,24 @@ export class AppointmentService {
           end: zonedTimeToUtc(slotEnd, timezone),
           available: !isOccupied,
         });
-
-        currentSlot = addMinutes(currentSlot, 30);
       }
 
-      return slots;
-    } catch (error) {
-      logger.error('Get available slots error:', error);
-      throw new AppError('Failed to get available slots', 500);
+      currentSlot = addMinutes(currentSlot, SLOT_INTERVAL);
     }
+
+    return slots;
   }
 
   async getAppointmentById(id: string, businessId: string) {
     const { data, error } = await supabase
       .from('appointments')
-      .select(`
-        *,
-        employee:employees(*),
-        customer:customers(*),
-        service:services(*)
-      `)
+      .select(APPOINTMENT_SELECT_QUERY)
       .eq('id', id)
       .eq('business_id', businessId)
       .single();
 
     if (error || !data) {
-      throw new AppError('Appointment not found', 404);
+      throw new NotFoundError('Appointment');
     }
 
     return data;
@@ -212,12 +229,7 @@ export class AppointmentService {
   async getAppointmentsByBusiness(businessId: string, startDate?: Date, endDate?: Date) {
     let query = supabase
       .from('appointments')
-      .select(`
-        *,
-        employee:employees(*),
-        customer:customers(*),
-        service:services(*)
-      `)
+      .select(APPOINTMENT_SELECT_QUERY)
       .eq('business_id', businessId)
       .order('start_time', { ascending: true });
 

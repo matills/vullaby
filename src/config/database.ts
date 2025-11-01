@@ -1,22 +1,22 @@
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { config } from './env';
 
-dotenv.config();
+const createSupabaseClient = (useServiceKey = false): SupabaseClient => {
+  const key = useServiceKey ? config.supabase.serviceKey : config.supabase.anonKey;
+  
+  if (!key) {
+    throw new Error(`Supabase ${useServiceKey ? 'service' : 'anon'} key is missing`);
+  }
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+  return createClient(config.supabase.url, key, {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: false,
+    },
+  });
+};
 
-if (!supabaseUrl) {
-  throw new Error('SUPABASE_URL is missing');
-}
-
-if (!supabaseAnonKey) {
-  throw new Error('SUPABASE_ANON_KEY is missing');
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-export const supabaseAdmin = supabaseServiceKey 
-  ? createClient(supabaseUrl, supabaseServiceKey)
+export const supabase = createSupabaseClient();
+export const supabaseAdmin = config.supabase.serviceKey 
+  ? createSupabaseClient(true)
   : supabase;

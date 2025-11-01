@@ -1,5 +1,5 @@
 import { supabase } from '../config/database';
-import { AppError } from '../middlewares/error.middleware';
+import { AppError, NotFoundError, ConflictError } from '../middlewares/error.middleware';
 import logger from '../utils/logger';
 
 interface CreateEmployeeData {
@@ -18,18 +18,24 @@ interface WorkingHoursData {
   isAvailable: boolean;
 }
 
+type UpdateEmployeeData = Partial<Omit<CreateEmployeeData, 'businessId'>>;
+
 export class EmployeeService {
+  private async checkDuplicateEmail(email: string): Promise<void> {
+    const { data: existing } = await supabase
+      .from('employees')
+      .select('id')
+      .eq('email', email)
+      .single();
+
+    if (existing) {
+      throw new ConflictError('Employee with this email already exists');
+    }
+  }
+
   async createEmployee(data: CreateEmployeeData) {
     try {
-      const { data: existing } = await supabase
-        .from('employees')
-        .select('id')
-        .eq('email', data.email)
-        .single();
-
-      if (existing) {
-        throw new AppError('Employee with this email already exists', 409);
-      }
+      await this.checkDuplicateEmail(data.email);
 
       const { data: employee, error } = await supabase
         .from('employees')
@@ -45,6 +51,7 @@ export class EmployeeService {
         .single();
 
       if (error || !employee) {
+        logger.error('Failed to create employee:', error);
         throw new AppError('Failed to create employee', 500);
       }
 
@@ -65,6 +72,7 @@ export class EmployeeService {
       .order('name');
 
     if (error) {
+      logger.error('Failed to fetch employees:', error);
       throw new AppError('Failed to fetch employees', 500);
     }
 
@@ -80,22 +88,23 @@ export class EmployeeService {
       .single();
 
     if (error || !data) {
-      throw new AppError('Employee not found', 404);
+      throw new NotFoundError('Employee');
     }
 
     return data;
   }
 
-  async updateEmployee(
-    id: string,
-    businessId: string,
-    updates: Partial<CreateEmployeeData>
-  ) {
-    const updateData: any = {};
+  async updateEmployee(id: string, businessId: string, updates: UpdateEmployeeData) {
+    const updateData: Record<string, any> = {};
+    
     if (updates.name) updateData.name = updates.name;
     if (updates.email) updateData.email = updates.email;
     if (updates.phone !== undefined) updateData.phone = updates.phone;
     if (updates.role) updateData.role = updates.role;
+
+    if (Object.keys(updateData).length === 0) {
+      throw new AppError('No fields to update', 400);
+    }
 
     const { data, error } = await supabase
       .from('employees')
@@ -106,6 +115,7 @@ export class EmployeeService {
       .single();
 
     if (error || !data) {
+      logger.error('Failed to update employee:', error);
       throw new AppError('Failed to update employee', 500);
     }
 
@@ -123,6 +133,7 @@ export class EmployeeService {
       .single();
 
     if (error || !data) {
+      logger.error('Failed to update employee status:', error);
       throw new AppError('Failed to update employee status', 500);
     }
 
@@ -138,6 +149,7 @@ export class EmployeeService {
       .eq('business_id', businessId);
 
     if (error) {
+      logger.error('Failed to delete employee:', error);
       throw new AppError('Failed to delete employee', 500);
     }
 
@@ -155,47 +167,55 @@ export class EmployeeService {
         .single();
 
       if (existing) {
-        const { data: updated, error } = await supabase
-          .from('working_hours')
-          .update({
-            start_time: data.startTime,
-            end_time: data.endTime,
-            is_available: data.isAvailable,
-          })
-          .eq('id', existing.id)
-          .select()
-          .single();
-
-        if (error || !updated) {
-          throw new AppError('Failed to update working hours', 500);
-        }
-
-        return updated;
+        return this.updateWorkingHours(existing.id, data);
       }
 
-      const { data: workingHours, error } = await supabase
-        .from('working_hours')
-        .insert({
-          employee_id: data.employeeId,
-          day_of_week: data.dayOfWeek,
-          start_time: data.startTime,
-          end_time: data.endTime,
-          is_available: data.isAvailable,
-        })
-        .select()
-        .single();
-
-      if (error || !workingHours) {
-        throw new AppError('Failed to create working hours', 500);
-      }
-
-      logger.info(`Working hours set for employee ${data.employeeId}`);
-      return workingHours;
+      return this.createWorkingHours(data);
     } catch (error) {
       logger.error('Set working hours error:', error);
       if (error instanceof AppError) throw error;
       throw new AppError('Failed to set working hours', 500);
     }
+  }
+
+  private async updateWorkingHours(id: string, data: WorkingHoursData) {
+    const { data: updated, error } = await supabase
+      .from('working_hours')
+      .update({
+        start_time: data.startTime,
+        end_time: data.endTime,
+        is_available: data.isAvailable,
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error || !updated) {
+      throw new AppError('Failed to update working hours', 500);
+    }
+
+    return updated;
+  }
+
+  private async createWorkingHours(data: WorkingHoursData) {
+    const { data: workingHours, error } = await supabase
+      .from('working_hours')
+      .insert({
+        employee_id: data.employeeId,
+        day_of_week: data.dayOfWeek,
+        start_time: data.startTime,
+        end_time: data.endTime,
+        is_available: data.isAvailable,
+      })
+      .select()
+      .single();
+
+    if (error || !workingHours) {
+      throw new AppError('Failed to create working hours', 500);
+    }
+
+    logger.info(`Working hours set for employee ${data.employeeId}`);
+    return workingHours;
   }
 
   async getWorkingHours(employeeId: string) {
@@ -206,6 +226,7 @@ export class EmployeeService {
       .order('day_of_week');
 
     if (error) {
+      logger.error('Failed to fetch working hours:', error);
       throw new AppError('Failed to fetch working hours', 500);
     }
 

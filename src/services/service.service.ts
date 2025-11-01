@@ -1,5 +1,5 @@
 import { supabase } from '../config/database';
-import { AppError } from '../middlewares/error.middleware';
+import { AppError, NotFoundError } from '../middlewares/error.middleware';
 import logger from '../utils/logger';
 
 interface CreateServiceData {
@@ -9,6 +9,8 @@ interface CreateServiceData {
   durationMinutes: number;
   price: number;
 }
+
+type UpdateServiceData = Partial<Omit<CreateServiceData, 'businessId'>>;
 
 export class ServiceService {
   async createService(data: CreateServiceData) {
@@ -71,22 +73,23 @@ export class ServiceService {
       .single();
 
     if (error || !data) {
-      throw new AppError('Service not found', 404);
+      throw new NotFoundError('Service');
     }
 
     return data;
   }
 
-  async updateService(
-    id: string,
-    businessId: string,
-    updates: Partial<CreateServiceData>
-  ) {
-    const updateData: any = {};
+  async updateService(id: string, businessId: string, updates: UpdateServiceData) {
+    const updateData: Record<string, any> = {};
+    
     if (updates.name) updateData.name = updates.name;
     if (updates.description !== undefined) updateData.description = updates.description;
     if (updates.durationMinutes) updateData.duration_minutes = updates.durationMinutes;
     if (updates.price !== undefined) updateData.price = updates.price;
+
+    if (Object.keys(updateData).length === 0) {
+      throw new AppError('No fields to update', 400);
+    }
 
     const { data, error } = await supabase
       .from('services')
