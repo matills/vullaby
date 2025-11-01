@@ -6,6 +6,7 @@ import { WhatsAppMessage, TimeSlot } from '../types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import logger from '../utils/logger';
+import { scheduleReminder } from '../jobs/reminder.processor';
 
 type ConversationState = 'idle' | 'awaiting_service' | 'awaiting_slot' | 'awaiting_cancellation';
 
@@ -226,6 +227,30 @@ Si necesitas cancelar o reprogramar, responde a este mensaje.`;
     return this.sendMessage(phone, message);
   }
 
+  async sendAppointmentReminder(phone: string, data: {
+    customerName: string;
+    serviceName: string;
+    startTime: Date;
+    businessName: string;
+  }) {
+    const dateStr = format(data.startTime, "EEEE d 'de' MMMM", { locale: es });
+    const timeStr = format(data.startTime, 'HH:mm');
+
+    const message = `Hola ${data.customerName} 👋
+
+Te recordamos tu turno para mañana:
+
+📅 ${dateStr}
+🕐 ${timeStr}
+💈 ${data.serviceName}
+
+📍 ${data.businessName}
+
+¡Te esperamos!`;
+
+    return this.sendMessage(phone, message);
+  }
+
   async handleIncomingMessage(message: WhatsAppMessage) {
     try {
       const normalizedPhone = PhoneFormatter.normalize(message.from);
@@ -419,6 +444,14 @@ Si necesitas cancelar o reprogramar, responde a este mensaje.`;
         logger.error('Error creating appointment:', error);
         throw error;
       }
+
+      await scheduleReminder({
+        id: appointment.id,
+        customerId: customer.id,
+        serviceId: context.selectedServiceId!,
+        startTime: selectedSlot.start,
+        businessId: context.businessId!,
+      });
 
       await this.sendAppointmentConfirmation(phone, {
         customerName: customer.name,

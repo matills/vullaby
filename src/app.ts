@@ -1,10 +1,12 @@
-import express, { Application } from 'express';
+import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { config, validateConfig } from './config/env';
 import { errorHandler } from './middlewares/error.middleware';
 import logger from './utils/logger';
+import { startCronJobs } from './jobs/cron.scheduler';
+import './jobs/reminder.processor';
 
 import authRoutes from './routes/auth.routes';
 import appointmentRoutes from './routes/appointment.routes';
@@ -15,8 +17,7 @@ import employeeRoutes from './routes/employee.routes';
 
 validateConfig();
 
-const app: Application = express();
-
+const app = express();
 app.set('trust proxy', 1);
 
 app.use(helmet());
@@ -31,18 +32,11 @@ const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   message: 'Too many requests from this IP',
-  standardHeaders: true,
-  legacyHeaders: false,
 });
-
 app.use('/api/', limiter);
 
 app.get('/health', (_req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    environment: config.env,
-  });
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 app.use('/api/auth', authRoutes);
@@ -54,10 +48,9 @@ app.use('/api/employees', employeeRoutes);
 
 app.use(errorHandler);
 
-const PORT = config.port;
+startCronJobs();
 
-app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT}`);
-  logger.info(`Environment: ${config.env}`);
-  logger.info(`Frontend URL: ${config.frontend.url}`);
+app.listen(config.port, () => {
+  logger.info(`🚀 Lina server running on port ${config.port}`);
+  logger.info(`📱 Environment: ${config.env}`);
 });

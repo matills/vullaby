@@ -4,6 +4,7 @@ import { TimeSlot } from '../types';
 import { addMinutes, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { utcToZonedTime, zonedTimeToUtc } from 'date-fns-tz';
 import logger from '../utils/logger';
+import { scheduleReminder, cancelReminder } from '../jobs/reminder.processor';
 
 interface CreateAppointmentData {
   businessId: string;
@@ -104,6 +105,15 @@ export class AppointmentService {
       }
 
       logger.info(`Appointment created: ${appointment.id}`);
+
+      await scheduleReminder({
+        id: appointment.id,
+        customerId: data.customerId,
+        serviceId: data.serviceId,
+        startTime: data.startTime,
+        businessId: data.businessId,
+      });
+
       return appointment;
     } catch (error) {
       logger.error('Create appointment error:', error);
@@ -220,6 +230,10 @@ export class AppointmentService {
 
     if (error || !data) {
       throw new AppError('Failed to update appointment', 500);
+    }
+
+    if (status === 'cancelled' || status === 'completed') {
+      await cancelReminder(id);
     }
 
     logger.info(`Appointment ${id} status updated to ${status}`);
