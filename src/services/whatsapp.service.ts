@@ -25,6 +25,21 @@ export class WhatsAppService implements MessageHandler {
     return this.transport.sendMessage(to, message);
   }
 
+  async sendRateLimitMessage(phone: string) {
+    const message = `⚠️ Has alcanzado el límite de mensajes por hora (10 mensajes).
+
+Por favor, intenta nuevamente en unos minutos o comunícate por otros medios.
+
+Gracias por tu comprensión.`;
+
+    try {
+      await this.sendMessage(phone, message);
+      logger.info(`Rate limit notification sent to ${phone}`);
+    } catch (error) {
+      logger.error('Failed to send rate limit message:', error);
+    }
+  }
+
   async sendAppointmentConfirmation(phone: string, data: {
     customerName: string;
     serviceName: string;

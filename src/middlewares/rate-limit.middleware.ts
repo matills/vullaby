@@ -51,12 +51,13 @@ export class RateLimiter {
     this.config = config;
   }
 
-  async isRateLimited(identifier: string): Promise<{ limited: boolean; remaining: number }> {
+  async isRateLimited(identifier: string): Promise<{ limited: boolean; remaining: number; firstViolation: boolean }> {
     if (!redis) {
-      return { limited: false, remaining: this.config.maxRequests };
+      return { limited: false, remaining: this.config.maxRequests, firstViolation: false };
     }
 
     const key = `${this.config.keyPrefix}:${identifier}`;
+    const notifiedKey = `${this.config.keyPrefix}:notified:${identifier}`;
     const now = Date.now();
     const windowStart = now - this.config.windowMs;
 
@@ -66,9 +67,16 @@ export class RateLimiter {
       const requestCount = await redis.zcard(key);
       
       if (requestCount >= this.config.maxRequests) {
+        const wasNotified = await redis.exists(notifiedKey);
+        
+        if (!wasNotified) {
+          await redis.setex(notifiedKey, Math.ceil(this.config.windowMs / 1000), '1');
+        }
+        
         return { 
           limited: true, 
-          remaining: 0 
+          remaining: 0,
+          firstViolation: !wasNotified
         };
       }
 
@@ -77,11 +85,12 @@ export class RateLimiter {
 
       return { 
         limited: false, 
-        remaining: this.config.maxRequests - requestCount - 1 
+        remaining: this.config.maxRequests - requestCount - 1,
+        firstViolation: false
       };
     } catch (error) {
       logger.error('Rate limit check failed:', error);
-      return { limited: false, remaining: this.config.maxRequests };
+      return { limited: false, remaining: this.config.maxRequests, firstViolation: false };
     }
   }
 
@@ -121,11 +130,19 @@ export const whatsappRateLimitMiddleware = async (
       return next();
     }
 
-    const { limited, remaining } = await whatsappRateLimiter.isRateLimited(phone);
+    const { limited, remaining, firstViolation } = await whatsappRateLimiter.isRateLimited(phone);
 
     if (limited) {
-      logger.warn(`Rate limit exceeded for phone: ${phone}`);
-      return res.status(200).send('OK');
+      if (firstViolation) {
+        logger.info(`Rate limit exceeded for ${phone} - sending notification`);
+        req.body.rateLimitExceeded = true;
+        req.body.rateLimitFirstTime = true;
+      } else {
+        logger.info(`Rate limit exceeded for ${phone} - ignoring (already notified)`);
+        res.status(200).send('OK');
+        return;
+      }
+      return next();
     }
 
     logger.info(`WhatsApp rate limit: ${remaining} remaining for ${phone}`);

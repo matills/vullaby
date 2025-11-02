@@ -18,10 +18,17 @@ export class WhatsAppController {
     try {
       logger.info('Webhook received:', req.body);
 
-      const { From, To, Body, ProfileName } = req.body;
+      const { From, To, Body, ProfileName, rateLimitExceeded, rateLimitFirstTime } = req.body;
 
       if (!From || !To || !Body) {
         logger.warn('Invalid webhook payload:', req.body);
+        res.status(200).send('OK');
+        return;
+      }
+
+      if (rateLimitExceeded && rateLimitFirstTime) {
+        const cleanFrom = From.replace('whatsapp:', '');
+        await whatsappService.sendRateLimitMessage(cleanFrom);
         res.status(200).send('OK');
         return;
       }
