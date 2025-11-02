@@ -2,8 +2,9 @@ import { supabaseAdmin } from '../../config/database';
 import { ConversationManager, ConversationContext } from './conversation.manager';
 import { scheduleReminder } from '../../jobs/reminder.processor';
 import { TimeSlot } from '../../types';
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { DateParser } from '../../utils/date.parser';
 import logger from '../../utils/logger';
 
 export interface MessageHandler {
@@ -49,33 +50,50 @@ export class ConversationHandler {
   ): Promise<void> {
     const message = messageBody.toLowerCase().trim();
 
-    const actions: Record<string, () => Promise<void>> = {
-      turno: () => this.startAppointmentFlow(phone, context, business),
-      reserva: () => this.startAppointmentFlow(phone, context, business),
-      agendar: () => this.startAppointmentFlow(phone, context, business),
-      cancelar: () => this.startCancellationFlow(phone, context, customer.id, business.id),
-      horarios: () => this.sendAvailabilityMessage(phone),
-      disponibilidad: () => this.sendAvailabilityMessage(phone),
-    };
+    if (message.includes('cancelar')) {
+      await this.startCancellationFlow(phone, context, customer.id, business.id);
+      return;
+    }
 
-    for (const [keyword, action] of Object.entries(actions)) {
-      if (message.includes(keyword)) {
-        await action();
-        return;
+    if (message.includes('horarios') || message.includes('disponibilidad')) {
+      await this.sendAvailabilityMessage(phone);
+      return;
+    }
+
+    const hasAppointmentKeyword = ['turno', 'reserva', 'agendar'].some(kw => message.includes(kw));
+    
+    if (hasAppointmentKeyword) {
+      const parsedDate = DateParser.extractDateFromMessage(messageBody, business.timezone);
+      
+      if (parsedDate) {
+        logger.whatsapp('date_parsed', phone, {
+          customerId: customer.id,
+          businessId: business.id,
+          parsedDate: parsedDate.date.toISOString(),
+          pattern: parsedDate.matchedText,
+          confidence: parsedDate.confidence,
+        });
+
+        context.selectedDate = parsedDate.date;
+        await this.conversationManager.set(phone, context);
+        await this.startAppointmentFlow(phone, context, business);
+      } else {
+        await this.startAppointmentFlow(phone, context, business);
       }
+      return;
     }
 
     await this.sendWelcomeMessage(phone, business.name);
   }
 
   private async sendWelcomeMessage(phone: string, businessName: string): Promise<void> {
-    const message = `¡Hola! Bienvenido a ${businessName} 👋
+    const message = `Hola! Bienvenido a ${businessName}
 
 Puedo ayudarte con:
-📅 Agendar turno
-❌ Cancelar turno
+- Agendar turno
+- Cancelar turno
 
-¿Qué necesitas?`;
+Que necesitas?`;
 
     await this.messageHandler.sendMessage(phone, message);
   }
@@ -83,7 +101,7 @@ Puedo ayudarte con:
   private async sendAvailabilityMessage(phone: string): Promise<void> {
     await this.messageHandler.sendMessage(
       phone,
-      'Para consultar disponibilidad, escribe "agendar turno" y te mostraré los horarios disponibles. 📅'
+      'Para consultar disponibilidad, escribe "agendar turno" y te mostrare los horarios disponibles.'
     );
   }
 
@@ -111,9 +129,13 @@ Puedo ayudarte con:
     context.state = 'awaiting_service';
     await this.conversationManager.set(phone, context);
 
+    const dateInfo = context.selectedDate 
+      ? `\nFecha: ${format(context.selectedDate, "EEEE d 'de' MMMM", { locale: es })}`
+      : '';
+
     await this.messageHandler.sendMessage(
       phone,
-      `¡Perfecto! Elige un servicio:\n\n${servicesList}\n\nResponde con el número del servicio (ejemplo: 1)`
+      `Perfecto! Elige un servicio:\n\n${servicesList}${dateInfo}\n\nResponde con el numero del servicio (ejemplo: 1)`
     );
   }
 
@@ -126,7 +148,7 @@ Puedo ayudarte con:
     const selection = parseInt(messageBody);
 
     if (isNaN(selection)) {
-      await this.messageHandler.sendMessage(phone, 'Por favor responde con el número del servicio (ejemplo: 1)');
+      await this.messageHandler.sendMessage(phone, 'Por favor responde con el numero del servicio (ejemplo: 1)');
       return;
     }
 
@@ -137,27 +159,31 @@ Puedo ayudarte con:
       .eq('is_active', true);
 
     if (!services || selection < 1 || selection > services.length) {
-      await this.messageHandler.sendMessage(phone, 'Número inválido. Por favor elige un servicio de la lista.');
+      await this.messageHandler.sendMessage(phone, 'Numero invalido. Por favor elige un servicio de la lista.');
       return;
     }
 
     const selectedService = services[selection - 1];
     context.selectedServiceId = selectedService.id;
 
-    const slots = await this.generateAvailableSlots(business.id, selectedService);
+    const targetDate = context.selectedDate || new Date();
+    const slots = await this.generateAvailableSlots(business.id, selectedService, targetDate);
+    
     context.availableSlots = slots;
     context.state = 'awaiting_slot';
     await this.conversationManager.set(phone, context);
 
     if (slots.length === 0) {
+      const dateStr = format(targetDate, "EEEE d 'de' MMMM", { locale: es });
       await this.messageHandler.sendMessage(
         phone,
-        `Lo siento, no hay horarios disponibles hoy para ${selectedService.name}.\n\nEscribe "turno" para intentar otro día.`
+        `Lo siento, no hay horarios disponibles el ${dateStr} para ${selectedService.name}.\n\nEscribe "turno" para intentar otro dia.`
       );
       await this.conversationManager.reset(phone);
       return;
     }
 
+    const dateStr = format(targetDate, "EEEE d 'de' MMMM", { locale: es });
     const slotsList = slots
       .slice(0, 5)
       .map((slot, i) => `${i + 1}. ${format(slot.start, 'HH:mm')}`)
@@ -165,7 +191,7 @@ Puedo ayudarte con:
 
     await this.messageHandler.sendMessage(
       phone,
-      `Horarios disponibles hoy para ${selectedService.name}:\n\n${slotsList}\n\nResponde con el número del horario (ejemplo: 1)`
+      `Horarios disponibles el ${dateStr} para ${selectedService.name}:\n\n${slotsList}\n\nResponde con el numero del horario (ejemplo: 1)`
     );
   }
 
@@ -179,7 +205,7 @@ Puedo ayudarte con:
     const selection = parseInt(messageBody);
 
     if (isNaN(selection) || !context.availableSlots || selection < 1 || selection > context.availableSlots.length) {
-      await this.messageHandler.sendMessage(phone, 'Número inválido. Por favor elige un horario de la lista.');
+      await this.messageHandler.sendMessage(phone, 'Numero invalido. Por favor elige un horario de la lista.');
       return;
     }
 
@@ -218,9 +244,20 @@ Puedo ayudarte con:
       .single();
 
     if (error) {
-      logger.error('Error creating appointment:', error);
+      logger.error('Error creating appointment', error, {
+        customerId: customer.id,
+        businessId: context.businessId,
+        serviceId: context.selectedServiceId,
+      });
       throw error;
     }
+
+    logger.appointment('created', appointment.id, {
+      businessId: context.businessId,
+      customerId: customer.id,
+      serviceId: context.selectedServiceId,
+      startTime: selectedSlot.start.toISOString(),
+    });
 
     await scheduleReminder({
       id: appointment.id,
@@ -241,24 +278,44 @@ Puedo ayudarte con:
     await this.conversationManager.reset(phone);
   }
 
-  private async generateAvailableSlots(businessId: string, service: any): Promise<TimeSlot[]> {
+  private async generateAvailableSlots(businessId: string, service: any, targetDate: Date): Promise<TimeSlot[]> {
     const slots: TimeSlot[] = [];
-    const now = new Date();
-    const currentTime = new Date();
+    const dayStart = startOfDay(targetDate);
+    const dayEnd = endOfDay(targetDate);
+    
+    const { data: appointments } = await supabaseAdmin
+      .from('appointments')
+      .select('start_time, end_time')
+      .eq('business_id', businessId)
+      .in('status', ['pending', 'confirmed'])
+      .gte('start_time', dayStart.toISOString())
+      .lte('start_time', dayEnd.toISOString());
+
+    const currentTime = new Date(dayStart);
     currentTime.setHours(9, 0, 0, 0);
 
-    const endTime = new Date();
+    const endTime = new Date(dayStart);
     endTime.setHours(20, 0, 0, 0);
+
+    const now = new Date();
 
     while (currentTime < endTime) {
       const slotEnd = new Date(currentTime.getTime() + service.duration_minutes * 60000);
       
       if (currentTime > now) {
-        slots.push({
-          start: new Date(currentTime),
-          end: slotEnd,
-          available: true,
+        const isOccupied = appointments?.some(apt => {
+          const aptStart = new Date(apt.start_time);
+          const aptEnd = new Date(apt.end_time);
+          return currentTime < aptEnd && slotEnd > aptStart;
         });
+
+        if (!isOccupied) {
+          slots.push({
+            start: new Date(currentTime),
+            end: slotEnd,
+            available: true,
+          });
+        }
       }
 
       currentTime.setTime(slotEnd.getTime());
@@ -283,7 +340,7 @@ Puedo ayudarte con:
       .order('start_time', { ascending: true });
 
     if (!appointments || appointments.length === 0) {
-      await this.messageHandler.sendMessage(phone, 'No tienes turnos próximos para cancelar.');
+      await this.messageHandler.sendMessage(phone, 'No tienes turnos proximos para cancelar.');
       return;
     }
 
@@ -300,7 +357,7 @@ Puedo ayudarte con:
 
     await this.messageHandler.sendMessage(
       phone,
-      `Tus próximos turnos:\n\n${appointmentsList}\n\nResponde con el número del turno a cancelar (ejemplo: 1)`
+      `Tus proximos turnos:\n\n${appointmentsList}\n\nResponde con el numero del turno a cancelar (ejemplo: 1)`
     );
   }
 
@@ -312,7 +369,7 @@ Puedo ayudarte con:
     const selection = parseInt(messageBody);
 
     if (isNaN(selection) || !context.pendingAppointments || selection < 1 || selection > context.pendingAppointments.length) {
-      await this.messageHandler.sendMessage(phone, 'Número inválido. Por favor elige un turno de la lista.');
+      await this.messageHandler.sendMessage(phone, 'Numero invalido. Por favor elige un turno de la lista.');
       return;
     }
 
@@ -325,8 +382,13 @@ Puedo ayudarte con:
 
     if (error) throw error;
 
+    logger.appointment('cancelled', appointmentToCancel.id, {
+      businessId: context.businessId,
+      customerId: context.customerId,
+    });
+
     const dateStr = format(new Date(appointmentToCancel.start_time), "d 'de' MMMM 'a las' HH:mm", { locale: es });
-    await this.messageHandler.sendMessage(phone, `✅ Tu turno del ${dateStr} ha sido cancelado exitosamente.`);
+    await this.messageHandler.sendMessage(phone, `Tu turno del ${dateStr} ha sido cancelado exitosamente.`);
 
     await this.conversationManager.reset(phone);
   }

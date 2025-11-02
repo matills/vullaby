@@ -11,6 +11,7 @@ export interface ConversationContext {
   availableSlots?: any[];
   pendingAppointments?: any[];
   lastMessageAt?: number;
+  selectedDate?: Date;
 }
 
 export class ConversationManager {

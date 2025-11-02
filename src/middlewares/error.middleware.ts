@@ -50,7 +50,7 @@ export const errorHandler = (
   next: NextFunction
 ) => {
   if (err instanceof AppError) {
-    logger.error({
+    logger.error(err.message, {
       message: err.message,
       stack: err.stack,
       url: req.url,
@@ -63,7 +63,7 @@ export const errorHandler = (
     });
   }
 
-  logger.error({
+  logger.error(err.message, {
     message: err.message,
     stack: err.stack,
     url: req.url,
