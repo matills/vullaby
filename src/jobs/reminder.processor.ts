@@ -62,15 +62,17 @@ export const processReminder = async (job: Job<ReminderJob>) => {
   }
 };
 
-reminderQueue.process(5, processReminder);
+if (reminderQueue) {
+  reminderQueue.process(5, processReminder);
 
-reminderQueue.on('completed', (job) => {
-  logger.info(`Reminder job ${job.id} completed`);
-});
+  reminderQueue.on('completed', (job) => {
+    logger.info(`Reminder job ${job.id} completed`);
+  });
 
-reminderQueue.on('failed', (job, err) => {
-  logger.error(`Reminder job ${job?.id} failed:`, err);
-});
+  reminderQueue.on('failed', (job, err) => {
+    logger.error(`Reminder job ${job?.id} failed:`, err);
+  });
+}
 
 export const scheduleReminder = async (appointmentData: {
   id: string;
@@ -79,6 +81,11 @@ export const scheduleReminder = async (appointmentData: {
   startTime: Date;
   businessId: string;
 }) => {
+  if (!reminderQueue) {
+    logger.warn('Reminder queue not available, skipping reminder scheduling');
+    return;
+  }
+
   try {
     const { data: customer } = await supabaseAdmin
       .from('customers')
@@ -135,6 +142,10 @@ export const scheduleReminder = async (appointmentData: {
 };
 
 export const cancelReminder = async (appointmentId: string) => {
+  if (!reminderQueue) {
+    return;
+  }
+
   try {
     const job = await reminderQueue.getJob(`reminder-${appointmentId}`);
     if (job) {
@@ -147,6 +158,11 @@ export const cancelReminder = async (appointmentId: string) => {
 };
 
 export const scanAndSchedulePendingReminders = async () => {
+  if (!reminderQueue) {
+    logger.warn('Reminder queue not available, skipping scan');
+    return;
+  }
+
   try {
     logger.info('Scanning for pending reminders...');
 
