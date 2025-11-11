@@ -1,10 +1,11 @@
 import { supabase } from '../config/database';
 import { AppError, NotFoundError, ConflictError } from '../middlewares/error.middleware';
-import { TimeSlot } from '../types';
+import { TimeSlot, WorkingHours, Appointment } from '../types';
 import { addMinutes, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { utcToZonedTime, zonedTimeToUtc } from 'date-fns-tz';
 import logger from '../utils/logger';
 import { scheduleReminder, cancelReminder } from '../jobs/reminder.processor';
+import { TIME_CONSTANTS, DB_QUERIES, APPOINTMENT_STATUS, AppointmentStatus } from '../constants';
 
 interface CreateAppointmentData {
   businessId: string;
@@ -22,14 +23,19 @@ interface GetAvailabilityParams {
   serviceId: string;
 }
 
-const APPOINTMENT_SELECT_QUERY = `
-  *,
-  employee:employees(*),
-  customer:customers(*),
-  service:services(*)
-`;
+const APPOINTMENT_SELECT_QUERY = DB_QUERIES.APPOINTMENT_SELECT;
 
+/**
+ * Service class for managing appointments
+ * Handles appointment creation, availability checking, and scheduling
+ */
 export class AppointmentService {
+  /**
+   * Retrieves the duration of a service in minutes
+   * @param serviceId - UUID of the service
+   * @returns Duration in minutes
+   * @throws {NotFoundError} If service is not found
+   */
   private async getServiceDuration(serviceId: string): Promise<number> {
     const { data: service, error } = await supabase
       .from('services')
@@ -44,6 +50,11 @@ export class AppointmentService {
     return service.duration_minutes;
   }
 
+  /**
+   * Retrieves the timezone for a business
+   * @param businessId - UUID of the business
+   * @returns Timezone string (defaults to Buenos Aires)
+   */
   private async getBusinessTimezone(businessId: string): Promise<string> {
     const { data: business } = await supabase
       .from('businesses')
@@ -51,9 +62,16 @@ export class AppointmentService {
       .eq('id', businessId)
       .single();
 
-    return business?.timezone || 'America/Argentina/Buenos_Aires';
+    return business?.timezone || TIME_CONSTANTS.DEFAULT_TIMEZONE;
   }
 
+  /**
+   * Checks if an employee is available for a given time slot
+   * @param employeeId - UUID of the employee
+   * @param startTime - Start time of the slot
+   * @param endTime - End time of the slot
+   * @returns True if available, false otherwise
+   */
   async checkAvailability(
     employeeId: string,
     startTime: Date,
@@ -63,13 +81,20 @@ export class AppointmentService {
       .from('appointments')
       .select('id')
       .eq('employee_id', employeeId)
-      .in('status', ['pending', 'confirmed'])
+      .in('status', [APPOINTMENT_STATUS.PENDING, APPOINTMENT_STATUS.CONFIRMED])
       .or(`start_time.lt.${endTime.toISOString()},end_time.gt.${startTime.toISOString()}`);
 
     return !conflicts || conflicts.length === 0;
   }
 
-  async createAppointment(data: CreateAppointmentData) {
+  /**
+   * Creates a new appointment
+   * @param data - Appointment creation data
+   * @returns Created appointment with related data
+   * @throws {ConflictError} If time slot is not available
+   * @throws {AppError} If creation fails
+   */
+  async createAppointment(data: CreateAppointmentData): Promise<Appointment> {
     try {
       const durationMinutes = await this.getServiceDuration(data.serviceId);
       const endTime = addMinutes(data.startTime, durationMinutes);
@@ -93,7 +118,7 @@ export class AppointmentService {
           service_id: data.serviceId,
           start_time: data.startTime.toISOString(),
           end_time: endTime.toISOString(),
-          status: 'pending',
+          status: APPOINTMENT_STATUS.PENDING,
           notes: data.notes,
         })
         .select(APPOINTMENT_SELECT_QUERY)
@@ -122,6 +147,12 @@ export class AppointmentService {
     }
   }
 
+  /**
+   * Gets available time slots for a given employee, date, and service
+   * @param params - Parameters including businessId, employeeId, date, and serviceId
+   * @returns Array of time slots with availability status
+   * @throws {AppError} If fetching slots fails
+   */
   async getAvailableSlots(params: GetAvailabilityParams): Promise<TimeSlot[]> {
     try {
       const timezone = await this.getBusinessTimezone(params.businessId);
@@ -145,7 +176,7 @@ export class AppointmentService {
         .from('appointments')
         .select('start_time, end_time')
         .eq('employee_id', params.employeeId)
-        .in('status', ['pending', 'confirmed'])
+        .in('status', [APPOINTMENT_STATUS.PENDING, APPOINTMENT_STATUS.CONFIRMED])
         .gte('start_time', startOfDay(zonedDate).toISOString())
         .lte('end_time', endOfDay(zonedDate).toISOString());
 
@@ -162,11 +193,20 @@ export class AppointmentService {
     }
   }
 
+  /**
+   * Generates time slots for a given day based on working hours
+   * @param date - Date to generate slots for
+   * @param workingHours - Employee's working hours for the day
+   * @param durationMinutes - Duration of the service
+   * @param appointments - Existing appointments for the day
+   * @param timezone - Business timezone
+   * @returns Array of time slots
+   */
   private generateTimeSlots(
     date: Date,
-    workingHours: any,
+    workingHours: WorkingHours,
     durationMinutes: number,
-    appointments: any[],
+    appointments: Partial<Appointment>[],
     timezone: string
   ): TimeSlot[] {
     const slots: TimeSlot[] = [];
@@ -179,15 +219,14 @@ export class AppointmentService {
     const dayEnd = new Date(date);
     dayEnd.setHours(endHour, endMinute, 0, 0);
 
-    const SLOT_INTERVAL = 30;
-
     while (currentSlot < dayEnd) {
       const slotEnd = addMinutes(currentSlot, durationMinutes);
 
       if (slotEnd <= dayEnd) {
         const isOccupied = appointments.some(apt => {
-          const aptStart = parseISO(apt.start_time);
-          const aptEnd = parseISO(apt.end_time);
+          if (!apt.start_time || !apt.end_time) return false;
+          const aptStart = parseISO(apt.start_time.toString());
+          const aptEnd = parseISO(apt.end_time.toString());
           return currentSlot < aptEnd && slotEnd > aptStart;
         });
 
@@ -198,13 +237,20 @@ export class AppointmentService {
         });
       }
 
-      currentSlot = addMinutes(currentSlot, SLOT_INTERVAL);
+      currentSlot = addMinutes(currentSlot, TIME_CONSTANTS.SLOT_INTERVAL_MINUTES);
     }
 
     return slots;
   }
 
-  async getAppointmentById(id: string, businessId: string) {
+  /**
+   * Retrieves an appointment by ID
+   * @param id - UUID of the appointment
+   * @param businessId - UUID of the business
+   * @returns Appointment with related data
+   * @throws {NotFoundError} If appointment is not found
+   */
+  async getAppointmentById(id: string, businessId: string): Promise<Appointment> {
     const { data, error } = await supabase
       .from('appointments')
       .select(APPOINTMENT_SELECT_QUERY)
@@ -219,7 +265,19 @@ export class AppointmentService {
     return data;
   }
 
-  async updateAppointmentStatus(id: string, businessId: string, status: string) {
+  /**
+   * Updates the status of an appointment
+   * @param id - UUID of the appointment
+   * @param businessId - UUID of the business
+   * @param status - New status for the appointment
+   * @returns Updated appointment
+   * @throws {AppError} If update fails
+   */
+  async updateAppointmentStatus(
+    id: string,
+    businessId: string,
+    status: AppointmentStatus
+  ): Promise<Appointment> {
     const { data, error } = await supabase
       .from('appointments')
       .update({ status })
@@ -232,7 +290,7 @@ export class AppointmentService {
       throw new AppError('Failed to update appointment', 500);
     }
 
-    if (status === 'cancelled' || status === 'completed') {
+    if (status === APPOINTMENT_STATUS.CANCELLED || status === APPOINTMENT_STATUS.COMPLETED) {
       await cancelReminder(id);
     }
 
@@ -240,7 +298,19 @@ export class AppointmentService {
     return data;
   }
 
-  async getAppointmentsByBusiness(businessId: string, startDate?: Date, endDate?: Date) {
+  /**
+   * Retrieves all appointments for a business within a date range
+   * @param businessId - UUID of the business
+   * @param startDate - Optional start date filter
+   * @param endDate - Optional end date filter
+   * @returns Array of appointments
+   * @throws {AppError} If fetching fails
+   */
+  async getAppointmentsByBusiness(
+    businessId: string,
+    startDate?: Date,
+    endDate?: Date
+  ): Promise<Appointment[]> {
     let query = supabase
       .from('appointments')
       .select(APPOINTMENT_SELECT_QUERY)
@@ -264,7 +334,13 @@ export class AppointmentService {
     return data;
   }
 
-  async cancelAppointment(id: string, businessId: string) {
-    return this.updateAppointmentStatus(id, businessId, 'cancelled');
+  /**
+   * Cancels an appointment
+   * @param id - UUID of the appointment
+   * @param businessId - UUID of the business
+   * @returns Cancelled appointment
+   */
+  async cancelAppointment(id: string, businessId: string): Promise<Appointment> {
+    return this.updateAppointmentStatus(id, businessId, APPOINTMENT_STATUS.CANCELLED);
   }
 }

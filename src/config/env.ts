@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import { JWT_CONFIG } from '../constants';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
@@ -55,7 +56,7 @@ export const config: Config = {
   
   jwt: {
     secret: getEnvVar('JWT_SECRET'),
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    expiresIn: process.env.JWT_EXPIRES_IN || JWT_CONFIG.DEFAULT_EXPIRES_IN,
   },
   
   redis: {

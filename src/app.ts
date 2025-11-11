@@ -6,6 +6,7 @@ import { config, validateConfig } from './config/env';
 import { errorHandler } from './middlewares/error.middleware';
 import logger from './utils/logger';
 import { startCronJobs } from './jobs/cron.scheduler';
+import { RATE_LIMIT } from './constants';
 import './jobs/reminder.processor';
 
 import authRoutes from './routes/auth.routes';
@@ -29,8 +30,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
+  windowMs: RATE_LIMIT.WINDOW_MS,
+  max: RATE_LIMIT.MAX_REQUESTS,
   message: 'Too many requests from this IP',
 });
 app.use('/api/', limiter);

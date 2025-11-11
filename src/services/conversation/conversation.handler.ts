@@ -2,7 +2,7 @@ import { supabaseAdmin } from '../../config/database';
 import { ConversationManager, ConversationContext } from './conversation.manager';
 import { scheduleReminder } from '../../jobs/reminder.processor';
 import { TimeSlot } from '../../types';
-import { format, startOfDay, endOfDay } from 'date-fns';
+import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DateParser } from '../../utils/date.parser';
 import logger from '../../utils/logger';
@@ -30,6 +30,21 @@ export class ConversationHandler {
     const context = await this.conversationManager.get(phone);
     context.businessId = business.id;
     context.customerId = customer.id;
+
+    // Check if user wants to restart the flow with keywords
+    const message = messageBody.toLowerCase().trim();
+    const restartKeywords = ['turno', 'reserva', 'agendar', 'cancelar'];
+    const wantsToRestart = restartKeywords.some(kw => message.includes(kw));
+
+    // If user is in a flow but uses restart keywords, reset and handle as initial message
+    if (context.state !== 'idle' && wantsToRestart) {
+      await this.conversationManager.reset(phone);
+      const newContext = await this.conversationManager.get(phone);
+      newContext.businessId = business.id;
+      newContext.customerId = customer.id;
+      await this.handleInitialMessage(phone, messageBody, newContext, customer, business);
+      return;
+    }
 
     const handlers = {
       awaiting_service: () => this.handleServiceSelection(phone, messageBody, context, business),
@@ -130,7 +145,7 @@ Que necesitas?`;
     await this.conversationManager.set(phone, context);
 
     const dateInfo = context.selectedDate 
-      ? `\nFecha: ${format(context.selectedDate, "EEEE d 'de' MMMM", { locale: es })}`
+      ? `\nFecha: ${format(typeof context.selectedDate === 'string' ? parseISO(context.selectedDate) : context.selectedDate, "EEEE d 'de' MMMM", { locale: es })}`
       : '';
 
     await this.messageHandler.sendMessage(
@@ -173,8 +188,11 @@ Que necesitas?`;
     context.state = 'awaiting_slot';
     await this.conversationManager.set(phone, context);
 
+    // Ensure targetDate is a Date object for formatting
+    const dateObj = typeof targetDate === 'string' ? parseISO(targetDate) : targetDate;
+
     if (slots.length === 0) {
-      const dateStr = format(targetDate, "EEEE d 'de' MMMM", { locale: es });
+      const dateStr = format(dateObj, "EEEE d 'de' MMMM", { locale: es });
       await this.messageHandler.sendMessage(
         phone,
         `Lo siento, no hay horarios disponibles el ${dateStr} para ${selectedService.name}.\n\nEscribe "turno" para intentar otro dia.`
@@ -183,7 +201,7 @@ Que necesitas?`;
       return;
     }
 
-    const dateStr = format(targetDate, "EEEE d 'de' MMMM", { locale: es });
+    const dateStr = format(dateObj, "EEEE d 'de' MMMM", { locale: es });
     const slotsList = slots
       .slice(0, 5)
       .map((slot, i) => `${i + 1}. ${format(slot.start, 'HH:mm')}`)
@@ -211,6 +229,10 @@ Que necesitas?`;
 
     const selectedSlot = context.availableSlots[selection - 1];
 
+    // Convert slot times back to Date objects (they're serialized as strings in Redis)
+    const startTime = typeof selectedSlot.start === 'string' ? new Date(selectedSlot.start) : selectedSlot.start;
+    const endTime = typeof selectedSlot.end === 'string' ? new Date(selectedSlot.end) : selectedSlot.end;
+
     const { data: service } = await supabaseAdmin
       .from('services')
       .select('*, business:businesses(name)')
@@ -236,8 +258,8 @@ Que necesitas?`;
         customer_id: customer.id,
         employee_id: employee.id,
         service_id: context.selectedServiceId!,
-        start_time: selectedSlot.start.toISOString(),
-        end_time: selectedSlot.end.toISOString(),
+        start_time: startTime.toISOString(),
+        end_time: endTime.toISOString(),
         status: 'confirmed',
       })
       .select()
@@ -256,14 +278,14 @@ Que necesitas?`;
       businessId: context.businessId,
       customerId: customer.id,
       serviceId: context.selectedServiceId,
-      startTime: selectedSlot.start.toISOString(),
+      startTime: startTime.toISOString(),
     });
 
     await scheduleReminder({
       id: appointment.id,
       customerId: customer.id,
       serviceId: context.selectedServiceId!,
-      startTime: selectedSlot.start,
+      startTime: startTime,
       businessId: context.businessId!,
     });
 
@@ -271,17 +293,19 @@ Que necesitas?`;
       customerName: customer.name,
       serviceName: service.name,
       employeeName: employee.name,
-      startTime: selectedSlot.start,
+      startTime: startTime,
       businessName: service.business.name,
     });
 
     await this.conversationManager.reset(phone);
   }
 
-  private async generateAvailableSlots(businessId: string, service: any, targetDate: Date): Promise<TimeSlot[]> {
+  private async generateAvailableSlots(businessId: string, service: any, targetDate: Date | string): Promise<TimeSlot[]> {
     const slots: TimeSlot[] = [];
-    const dayStart = startOfDay(targetDate);
-    const dayEnd = endOfDay(targetDate);
+    // Ensure targetDate is a Date object
+    const dateObj = typeof targetDate === 'string' ? parseISO(targetDate) : targetDate;
+    const dayStart = startOfDay(dateObj);
+    const dayEnd = endOfDay(dateObj);
     
     const { data: appointments } = await supabaseAdmin
       .from('appointments')

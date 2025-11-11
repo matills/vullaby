@@ -1,24 +1,56 @@
 import { supabase } from '../config/database';
 import { AppError, NotFoundError, ConflictError } from '../middlewares/error.middleware';
 import logger from '../utils/logger';
+import { DB_QUERIES } from '../constants';
+import { Customer } from '../types';
 
+/**
+ * Interface for customer creation data
+ */
 interface CreateCustomerData {
+  /**
+   * UUID of the business
+   */
   businessId: string;
+  /**
+   * Customer name
+   */
   name: string;
+  /**
+   * Customer phone number
+   */
   phone: string;
+  /**
+   * Customer email (optional)
+   */
   email?: string;
+  /**
+   * Customer notes (optional)
+   */
   notes?: string;
 }
 
+/**
+ * Type for customer update data
+ */
 type UpdateCustomerData = Partial<Omit<CreateCustomerData, 'businessId'>>;
 
-const APPOINTMENTS_SELECT_QUERY = `
-  *,
-  employee:employees(*),
-  service:services(*)
-`;
+/**
+ * Constant for appointments select query
+ */
+const APPOINTMENTS_SELECT_QUERY = DB_QUERIES.APPOINTMENTS_SELECT;
 
+/**
+ * Service class for managing customers
+ * Handles customer CRUD operations and related queries
+ */
 export class CustomerService {
+  /**
+   * Checks if a customer with the given phone already exists
+   * @param businessId - UUID of the business
+   * @param phone - Phone number to check
+   * @throws {ConflictError} If customer with phone already exists
+   */
   private async checkDuplicatePhone(businessId: string, phone: string): Promise<void> {
     const { data: existing } = await supabase
       .from('customers')
@@ -32,7 +64,14 @@ export class CustomerService {
     }
   }
 
-  async createCustomer(data: CreateCustomerData) {
+  /**
+   * Creates a new customer
+   * @param data - Customer creation data
+   * @returns Created customer
+   * @throws {ConflictError} If phone already exists
+   * @throws {AppError} If creation fails
+   */
+  async createCustomer(data: CreateCustomerData): Promise<Customer> {
     try {
       await this.checkDuplicatePhone(data.businessId, data.phone);
 
@@ -62,7 +101,14 @@ export class CustomerService {
     }
   }
 
-  async getCustomersByBusiness(businessId: string, search?: string) {
+  /**
+   * Retrieves all customers for a business with optional search
+   * @param businessId - UUID of the business
+   * @param search - Optional search term for name or phone
+   * @returns Array of customers
+   * @throws {AppError} If fetching fails
+   */
+  async getCustomersByBusiness(businessId: string, search?: string): Promise<Customer[]> {
     let query = supabase
       .from('customers')
       .select('*')
@@ -83,7 +129,14 @@ export class CustomerService {
     return data;
   }
 
-  async getCustomerById(id: string, businessId: string) {
+  /**
+   * Retrieves a customer by ID
+   * @param id - UUID of the customer
+   * @param businessId - UUID of the business
+   * @returns Customer data
+   * @throws {NotFoundError} If customer is not found
+   */
+  async getCustomerById(id: string, businessId: string): Promise<Customer> {
     const { data, error } = await supabase
       .from('customers')
       .select('*')
@@ -98,7 +151,13 @@ export class CustomerService {
     return data;
   }
 
-  async getCustomerByPhone(phone: string, businessId: string) {
+  /**
+   * Retrieves a customer by phone number
+   * @param phone - Phone number to search for
+   * @param businessId - UUID of the business
+   * @returns Customer data or null if not found
+   */
+  async getCustomerByPhone(phone: string, businessId: string): Promise<Customer | null> {
     const { data } = await supabase
       .from('customers')
       .select('*')
@@ -109,7 +168,15 @@ export class CustomerService {
     return data || null;
   }
 
-  async updateCustomer(id: string, businessId: string, updates: UpdateCustomerData) {
+  /**
+   * Updates a customer's information
+   * @param id - UUID of the customer
+   * @param businessId - UUID of the business
+   * @param updates - Fields to update
+   * @returns Updated customer
+   * @throws {AppError} If no fields to update or update fails
+   */
+  async updateCustomer(id: string, businessId: string, updates: UpdateCustomerData): Promise<Customer> {
     const updateData: Record<string, any> = {};
     
     if (updates.name) updateData.name = updates.name;
@@ -138,7 +205,14 @@ export class CustomerService {
     return data;
   }
 
-  async deleteCustomer(id: string, businessId: string) {
+  /**
+   * Deletes a customer
+   * @param id - UUID of the customer
+   * @param businessId - UUID of the business
+   * @returns Success status
+   * @throws {AppError} If deletion fails
+   */
+  async deleteCustomer(id: string, businessId: string): Promise<{ success: boolean }> {
     const { error } = await supabase
       .from('customers')
       .delete()
@@ -154,6 +228,13 @@ export class CustomerService {
     return { success: true };
   }
 
+  /**
+   * Retrieves all appointments for a customer
+   * @param customerId - UUID of the customer
+   * @param businessId - UUID of the business
+   * @returns Array of appointments
+   * @throws {AppError} If fetching fails
+   */
   async getCustomerAppointments(customerId: string, businessId: string) {
     const { data, error } = await supabase
       .from('appointments')

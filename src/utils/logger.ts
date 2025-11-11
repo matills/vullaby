@@ -1,5 +1,6 @@
 import winston from 'winston';
 import { config } from '../config/env';
+import { LOGGER_CONFIG } from '../constants';
 
 const logLevel = config.env === 'production' ? 'info' : 'debug';
 
@@ -44,16 +45,16 @@ if (config.env === 'production') {
     new winston.transports.File({ 
       filename: 'logs/error.log', 
       level: 'error',
-      maxsize: 5242880,
-      maxFiles: 5,
+      maxsize: LOGGER_CONFIG.MAX_FILE_SIZE,
+      maxFiles: LOGGER_CONFIG.MAX_FILES,
     })
   );
   
   logger.add(
     new winston.transports.File({ 
       filename: 'logs/combined.log',
-      maxsize: 5242880,
-      maxFiles: 5,
+      maxsize: LOGGER_CONFIG.MAX_FILE_SIZE,
+      maxFiles: LOGGER_CONFIG.MAX_FILES,
     })
   );
 }

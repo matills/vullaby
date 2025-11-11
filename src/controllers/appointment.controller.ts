@@ -2,31 +2,24 @@ import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { AppointmentService } from '../services/appointment.service';
 import { z } from 'zod';
+import {
+  createAppointmentDto,
+  getAvailabilityDto,
+  updateAppointmentStatusDto,
+} from '../dtos/appointment.dto';
 
 const appointmentService = new AppointmentService();
 
 export const createAppointmentSchema = z.object({
-  body: z.object({
-    employeeId: z.string().uuid(),
-    customerId: z.string().uuid(),
-    serviceId: z.string().uuid(),
-    startTime: z.string().datetime(),
-    notes: z.string().optional(),
-  }),
+  body: createAppointmentDto,
 });
 
 export const getAvailabilitySchema = z.object({
-  query: z.object({
-    employeeId: z.string().uuid(),
-    date: z.string(),
-    serviceId: z.string().uuid(),
-  }),
+  query: getAvailabilityDto,
 });
 
 export const updateStatusSchema = z.object({
-  body: z.object({
-    status: z.enum(['pending', 'confirmed', 'completed', 'cancelled', 'no_show']),
-  }),
+  body: updateAppointmentStatusDto,
 });
 
 export class AppointmentController {
@@ -34,8 +27,7 @@ export class AppointmentController {
     try {
       const appointment = await appointmentService.createAppointment({
         businessId: req.user!.businessId,
-        employeeId: req.body.employeeId,
-        customerId: req.body.customerId,
+        ...req.body,
         serviceId: req.body.serviceId,
         startTime: new Date(req.body.startTime),
         notes: req.body.notes,

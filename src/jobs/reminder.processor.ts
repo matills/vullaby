@@ -4,6 +4,7 @@ import { supabaseAdmin } from '../config/database';
 import { WhatsAppService } from '../services/whatsapp.service';
 import logger from '../utils/logger';
 import { subHours, addHours, startOfDay, endOfDay } from 'date-fns';
+import { TIME_CONSTANTS, APPOINTMENT_STATUS, QUEUE_CONFIG } from '../constants';
 
 interface ReminderJob {
   appointmentId: string;
@@ -33,7 +34,7 @@ export const processReminder = async (job: Job<ReminderJob>) => {
       return;
     }
 
-    if (appointment.status === 'cancelled' || appointment.status === 'completed') {
+    if (appointment.status === APPOINTMENT_STATUS.CANCELLED || appointment.status === APPOINTMENT_STATUS.COMPLETED) {
       logger.info(`Appointment ${appointmentId} is ${appointment.status}, skipping reminder`);
       return;
     }
@@ -63,7 +64,7 @@ export const processReminder = async (job: Job<ReminderJob>) => {
 };
 
 if (reminderQueue) {
-  reminderQueue.process(5, processReminder);
+  reminderQueue.process(QUEUE_CONFIG.REMINDER_CONCURRENCY, processReminder);
 
   reminderQueue.on('completed', (job) => {
     logger.info(`Reminder job ${job.id} completed`);
@@ -110,7 +111,7 @@ export const scheduleReminder = async (appointmentData: {
       return;
     }
 
-    const reminderTime = subHours(appointmentData.startTime, 24);
+    const reminderTime = subHours(appointmentData.startTime, TIME_CONSTANTS.REMINDER_HOURS_BEFORE);
     const now = new Date();
 
     if (reminderTime <= now) {
@@ -180,7 +181,7 @@ export const scanAndSchedulePendingReminders = async () => {
         start_time,
         reminder_sent
       `)
-      .in('status', ['pending', 'confirmed'])
+      .in('status', [APPOINTMENT_STATUS.PENDING, APPOINTMENT_STATUS.CONFIRMED])
       .eq('reminder_sent', false)
       .gte('start_time', startRange.toISOString())
       .lte('start_time', endRange.toISOString());
