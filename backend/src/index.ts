@@ -18,7 +18,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
@@ -26,9 +26,9 @@ app.get('/health', (req: Request, res: Response) => {
   });
 });
 
-// API Routes will be added here
-// app.use('/api/appointments', appointmentsRouter);
-// app.use('/api/webhooks', webhooksRouter);
+// API Routes
+import routes from './routes';
+app.use('/api', routes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
@@ -39,7 +39,7 @@ app.use((req: Request, res: Response) => {
 });
 
 // Error handler
-app.use((err: Error, req: Request, res: Response, next: any) => {
+app.use((err: Error, _req: Request, res: Response, _next: any) => {
   logger.error('Unhandled error:', err);
   res.status(500).json({
     error: 'Internal Server Error',
