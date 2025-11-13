@@ -3,6 +3,8 @@ import { Router } from 'express';
 import appointmentRoutes from './appointment.routes';
 import availabilityRoutes from './availability.routes';
 import businessRoutes from './business.routes';
+import businessUserRoutes from './business-user.routes';
+import customerRoutes from './customer.routes';
 import employeeRoutes from './employee.routes';
 import whatsappRoutes from './whatsapp.routes';
 
@@ -11,6 +13,8 @@ const router = Router();
 router.use('/appointments', appointmentRoutes);
 router.use('/availability', availabilityRoutes);
 router.use('/businesses', businessRoutes);
+router.use('/business-users', businessUserRoutes);
+router.use('/customers', customerRoutes);
 router.use('/employees', employeeRoutes);
 router.use('/whatsapp', whatsappRoutes);
 
