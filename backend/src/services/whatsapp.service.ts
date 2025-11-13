@@ -74,14 +74,37 @@ export const whatsappService = {
   },
 
   async handleInitialState(phone: string, _body: string): Promise<void> {
-    const welcomeMessage =
-      '¡Hola! 👋 Bienvenido a nuestro sistema de reservas.\n\n' +
-      'Para agendar un turno, necesito algunos datos.\n' +
-      '¿Con qué profesional te gustaría agendar?\n\n' +
-      'Escribe "lista" para ver los profesionales disponibles.';
+    const { employeeService } = await import('./employee.service');
+    const employees = await employeeService.getActiveEmployeesByBusiness('966d6a45-9111-4a42-b618-2f744ebce14a');
 
-    await this.sendMessage(phone, welcomeMessage);
-    sessionService.updateState(phone, 'selecting_employee');
+    if (employees.length === 0) {
+      await this.sendMessage(phone, 'Lo siento, no hay profesionales disponibles en este momento.');
+      sessionService.resetSession(phone);
+      return;
+    }
+
+    if (employees.length === 1) {
+      const employee = employees[0];
+      sessionService.updateData(phone, { employee_id: employee.id, employee_name: employee.name });
+
+      const message =
+        `Perfecto! Te agendaré con ${employee.name}.\n\n` +
+        '¿Para qué fecha te gustaría agendar?\n\n' +
+        'Por favor envía la fecha en formato DD/MM/YYYY\n' +
+        'Ejemplo: 25/12/2024';
+
+      await this.sendMessage(phone, message);
+      sessionService.updateState(phone, 'selecting_date');
+    } else {
+      const welcomeMessage =
+        '¡Hola! 👋 Bienvenido a nuestro sistema de reservas.\n\n' +
+        'Para agendar un turno, necesito algunos datos.\n' +
+        '¿Con qué profesional te gustaría agendar?\n\n' +
+        'Escribe "lista" para ver los profesionales disponibles.';
+
+      await this.sendMessage(phone, welcomeMessage);
+      sessionService.updateState(phone, 'selecting_employee');
+    }
   },
 
   async handleEmployeeSelection(phone: string, body: string): Promise<void> {
@@ -109,12 +132,16 @@ export const whatsappService = {
     }
 
     const [, day, month, year] = match;
-    const selectedDate = new Date(`${year}-${month}-${day}`);
+    const selectedDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    selectedDate.setHours(0, 0, 0, 0);
 
-    if (selectedDate < new Date()) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (selectedDate < today) {
       await this.sendMessage(
         phone,
-        'La fecha debe ser futura. Por favor selecciona otra fecha.'
+        'La fecha debe ser de hoy en adelante. Por favor selecciona otra fecha.'
       );
       return;
     }
