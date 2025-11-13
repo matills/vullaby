@@ -7,16 +7,9 @@ import {
   QueryAppointmentsInput,
 } from '../models';
 
-/**
- * Appointment service for managing appointments
- */
 export const appointmentService = {
-  /**
-   * Create a new appointment
-   */
   async createAppointment(data: CreateAppointmentInput): Promise<Appointment> {
     try {
-      // Check for conflicts
       const hasConflict = await this.checkConflict(
         data.employee_id,
         data.start_time,
@@ -54,9 +47,6 @@ export const appointmentService = {
     }
   },
 
-  /**
-   * Get appointment by ID
-   */
   async getAppointmentById(id: string): Promise<Appointment | null> {
     try {
       const { data, error } = await supabase
@@ -79,9 +69,6 @@ export const appointmentService = {
     }
   },
 
-  /**
-   * Query appointments with filters
-   */
   async queryAppointments(filters: QueryAppointmentsInput): Promise<Appointment[]> {
     try {
       let query = supabase.from('appointments').select('*');
@@ -124,15 +111,11 @@ export const appointmentService = {
     }
   },
 
-  /**
-   * Update an appointment
-   */
   async updateAppointment(
     id: string,
     data: UpdateAppointmentInput
   ): Promise<Appointment> {
     try {
-      // If updating time, check for conflicts
       if (data.start_time || data.end_time) {
         const existing = await this.getAppointmentById(id);
         if (!existing) {
@@ -171,9 +154,6 @@ export const appointmentService = {
     }
   },
 
-  /**
-   * Cancel an appointment
-   */
   async cancelAppointment(id: string): Promise<Appointment> {
     try {
       return await this.updateAppointment(id, { status: 'cancelled' });
@@ -183,9 +163,6 @@ export const appointmentService = {
     }
   },
 
-  /**
-   * Confirm an appointment
-   */
   async confirmAppointment(id: string): Promise<Appointment> {
     try {
       return await this.updateAppointment(id, { status: 'confirmed' });
@@ -195,9 +172,6 @@ export const appointmentService = {
     }
   },
 
-  /**
-   * Complete an appointment
-   */
   async completeAppointment(id: string): Promise<Appointment> {
     try {
       return await this.updateAppointment(id, { status: 'completed' });
@@ -207,9 +181,6 @@ export const appointmentService = {
     }
   },
 
-  /**
-   * Mark appointment as no-show
-   */
   async markNoShow(id: string): Promise<Appointment> {
     try {
       return await this.updateAppointment(id, { status: 'no_show' });
@@ -219,9 +190,6 @@ export const appointmentService = {
     }
   },
 
-  /**
-   * Delete an appointment
-   */
   async deleteAppointment(id: string): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -242,9 +210,6 @@ export const appointmentService = {
     }
   },
 
-  /**
-   * Check for appointment conflicts
-   */
   async checkConflict(
     employeeId: string,
     startTime: string,
@@ -277,9 +242,6 @@ export const appointmentService = {
     }
   },
 
-  /**
-   * Get appointments for a specific date range
-   */
   async getAppointmentsByDateRange(
     employeeId: string,
     startDate: string,
@@ -292,9 +254,6 @@ export const appointmentService = {
     });
   },
 
-  /**
-   * Get upcoming appointments
-   */
   async getUpcomingAppointments(
     businessId?: string,
     limit: number = 10
@@ -327,9 +286,6 @@ export const appointmentService = {
     }
   },
 
-  /**
-   * Get appointment statistics
-   */
   async getStats(businessId: string, startDate?: string, endDate?: string) {
     try {
       let query = supabase

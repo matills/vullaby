@@ -9,13 +9,7 @@ import {
 } from '../models';
 import { appointmentService } from './appointment.service';
 
-/**
- * Availability service for managing employee availability and time slots
- */
 export const availabilityService = {
-  /**
-   * Create availability rule
-   */
   async createAvailability(data: CreateAvailabilityInput): Promise<Availability> {
     try {
       const { data: availability, error } = await supabase
@@ -37,9 +31,6 @@ export const availabilityService = {
     }
   },
 
-  /**
-   * Get availability by employee ID
-   */
   async getAvailabilityByEmployee(employeeId: string): Promise<Availability[]> {
     try {
       const { data, error } = await supabase
@@ -60,9 +51,6 @@ export const availabilityService = {
     }
   },
 
-  /**
-   * Update availability
-   */
   async updateAvailability(
     id: string,
     data: UpdateAvailabilityInput
@@ -88,9 +76,6 @@ export const availabilityService = {
     }
   },
 
-  /**
-   * Delete availability
-   */
   async deleteAvailability(id: string): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -111,9 +96,6 @@ export const availabilityService = {
     }
   },
 
-  /**
-   * Get available time slots for a specific date and employee
-   */
   async getAvailableSlots(params: GetAvailableSlotsInput): Promise<TimeSlot[]> {
     try {
       const { business_id, employee_id, date, duration } = params;
@@ -121,7 +103,6 @@ export const availabilityService = {
       const targetDate = new Date(date);
       const dayOfWeek = targetDate.getDay();
 
-      // Get availability rules for this day
       let query = supabase
         .from('availability')
         .select('*')
@@ -130,7 +111,6 @@ export const availabilityService = {
       if (employee_id) {
         query = query.eq('employee_id', employee_id);
       } else {
-        // Get all employees for this business
         const { data: employees } = await supabase
           .from('employees')
           .select('id')
@@ -152,7 +132,6 @@ export const availabilityService = {
         return [];
       }
 
-      // Generate time slots for each availability window
       const allSlots: TimeSlot[] = [];
 
       for (const availability of availabilities) {
@@ -166,7 +145,6 @@ export const availabilityService = {
         allSlots.push(...slots);
       }
 
-      // Get existing appointments for this date
       const startOfDay = new Date(targetDate);
       startOfDay.setHours(0, 0, 0, 0);
 
@@ -180,7 +158,6 @@ export const availabilityService = {
         end_date: endOfDay.toISOString(),
       });
 
-      // Mark slots as unavailable if they overlap with appointments
       const availableSlots = allSlots.map((slot) => {
         const slotStart = new Date(slot.start_time);
         const slotEnd = new Date(slot.end_time);
@@ -209,7 +186,6 @@ export const availabilityService = {
         };
       });
 
-      // Filter out past slots
       const now = new Date();
       const futureSlots = availableSlots.filter(
         (slot) => new Date(slot.start_time) > now
@@ -222,9 +198,6 @@ export const availabilityService = {
     }
   },
 
-  /**
-   * Generate time slots within a time range
-   */
   generateTimeSlots(
     date: Date,
     startTime: string,
@@ -234,24 +207,20 @@ export const availabilityService = {
   ): TimeSlot[] {
     const slots: TimeSlot[] = [];
 
-    // Parse start and end times
     const [startHour, startMin] = startTime.split(':').map(Number);
     const [endHour, endMin] = endTime.split(':').map(Number);
 
-    // Create date objects for the start and end
     const current = new Date(date);
     current.setHours(startHour, startMin, 0, 0);
 
     const end = new Date(date);
     end.setHours(endHour, endMin, 0, 0);
 
-    // Generate slots
     while (current < end) {
       const slotStart = new Date(current);
       const slotEnd = new Date(current);
       slotEnd.setMinutes(slotEnd.getMinutes() + duration);
 
-      // Only add slot if it fits within the availability window
       if (slotEnd <= end) {
         slots.push({
           start_time: slotStart.toISOString(),
@@ -261,16 +230,12 @@ export const availabilityService = {
         });
       }
 
-      // Move to next slot
       current.setMinutes(current.getMinutes() + duration);
     }
 
     return slots;
   },
 
-  /**
-   * Check if employee is available at a specific time
-   */
   async isEmployeeAvailable(
     employeeId: string,
     startTime: string,
@@ -281,7 +246,6 @@ export const availabilityService = {
       const dayOfWeek = start.getDay();
       const timeString = `${start.getHours().toString().padStart(2, '0')}:${start.getMinutes().toString().padStart(2, '0')}`;
 
-      // Check availability rules
       const { data: availabilities, error } = await supabase
         .from('availability')
         .select('*')
@@ -296,7 +260,6 @@ export const availabilityService = {
         return false;
       }
 
-      // Check if time falls within any availability window
       const isWithinWindow = availabilities.some((availability) => {
         return (
           timeString >= availability.start_time &&
@@ -308,7 +271,6 @@ export const availabilityService = {
         return false;
       }
 
-      // Check for appointment conflicts
       const hasConflict = await appointmentService.checkConflict(
         employeeId,
         startTime,
@@ -322,9 +284,6 @@ export const availabilityService = {
     }
   },
 
-  /**
-   * Get next available slot for an employee
-   */
   async getNextAvailableSlot(
     employeeId: string,
     businessId: string,
@@ -335,7 +294,6 @@ export const availabilityService = {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // Check each day for the next N days
       for (let i = 0; i < daysAhead; i++) {
         const checkDate = new Date(today);
         checkDate.setDate(checkDate.getDate() + i);
@@ -361,16 +319,12 @@ export const availabilityService = {
     }
   },
 
-  /**
-   * Get availability summary for multiple employees
-   */
   async getAvailabilitySummary(
     businessId: string,
     date: string,
     duration: number = 60
   ): Promise<Record<string, TimeSlot[]>> {
     try {
-      // Get all employees for this business
       const { data: employees, error } = await supabase
         .from('employees')
         .select('id, name')
@@ -386,7 +340,6 @@ export const availabilityService = {
 
       const summary: Record<string, TimeSlot[]> = {};
 
-      // Get available slots for each employee
       for (const employee of employees) {
         const slots = await this.getAvailableSlots({
           business_id: businessId,

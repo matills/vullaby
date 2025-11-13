@@ -1,4 +1,3 @@
-// Database types
 export interface Business {
   id: string;
   name: string;
@@ -60,7 +59,6 @@ export interface Availability {
   updated_at: string;
 }
 
-// WhatsApp session types
 export interface WhatsAppSession {
   phone: string;
   state: ConversationState;
@@ -76,7 +74,6 @@ export type ConversationState =
   | 'confirming'
   | 'completed';
 
-// API Response types
 export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;

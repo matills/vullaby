@@ -3,13 +3,7 @@ import { logger } from '../config/logger';
 import { sessionService } from './session.service';
 import { IncomingWhatsAppMessage } from '../models';
 
-/**
- * WhatsApp service for handling messages
- */
 export const whatsappService = {
-  /**
-   * Send a message to a WhatsApp user
-   */
   async sendMessage(to: string, message: string): Promise<void> {
     try {
       await sendWhatsAppMessage(to, message);
@@ -20,9 +14,6 @@ export const whatsappService = {
     }
   },
 
-  /**
-   * Send a formatted message with options
-   */
   async sendMessageWithOptions(
     to: string,
     message: string,
@@ -37,9 +28,6 @@ export const whatsappService = {
     await this.sendMessage(to, fullMessage);
   },
 
-  /**
-   * Handle incoming WhatsApp message
-   */
   async handleIncomingMessage(message: IncomingWhatsAppMessage): Promise<void> {
     const phone = message.From;
     const body = message.Body.trim();
@@ -47,10 +35,8 @@ export const whatsappService = {
     logger.info(`Incoming message from ${phone}: ${body}`);
 
     try {
-      // Get or create session
       const session = sessionService.getOrCreateSession(phone);
 
-      // Process message based on conversation state
       switch (session.state) {
         case 'initial':
           await this.handleInitialState(phone, body);
@@ -87,9 +73,6 @@ export const whatsappService = {
     }
   },
 
-  /**
-   * Handle initial state - welcome message
-   */
   async handleInitialState(phone: string, _body: string): Promise<void> {
     const welcomeMessage =
       '¡Hola! 👋 Bienvenido a nuestro sistema de reservas.\n\n' +
@@ -101,12 +84,7 @@ export const whatsappService = {
     sessionService.updateState(phone, 'selecting_employee');
   },
 
-  /**
-   * Handle employee selection
-   */
   async handleEmployeeSelection(phone: string, body: string): Promise<void> {
-    // This would integrate with the employee service
-    // For now, we'll use a placeholder
 
     const message =
       'Perfecto! Ahora, ¿para qué fecha te gustaría agendar?\n\n' +
@@ -118,11 +96,7 @@ export const whatsappService = {
     sessionService.updateData(phone, { employee_id: body });
   },
 
-  /**
-   * Handle date selection
-   */
   async handleDateSelection(phone: string, body: string): Promise<void> {
-    // Validate date format
     const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
     const match = body.match(dateRegex);
 
@@ -137,7 +111,6 @@ export const whatsappService = {
     const [, day, month, year] = match;
     const selectedDate = new Date(`${year}-${month}-${day}`);
 
-    // Validate date is in the future
     if (selectedDate < new Date()) {
       await this.sendMessage(
         phone,
@@ -148,7 +121,6 @@ export const whatsappService = {
 
     sessionService.updateData(phone, { selected_date: selectedDate.toISOString() });
 
-    // Here we would fetch available time slots
     const message =
       'Horarios disponibles para ese día:\n\n' +
       '1. 09:00\n' +
@@ -162,11 +134,7 @@ export const whatsappService = {
     sessionService.updateState(phone, 'selecting_time');
   },
 
-  /**
-   * Handle time selection
-   */
   async handleTimeSelection(phone: string, body: string): Promise<void> {
-    // Simple time selection logic
     const timeMap: Record<string, string> = {
       '1': '09:00',
       '2': '10:00',
@@ -199,14 +167,10 @@ export const whatsappService = {
     sessionService.updateState(phone, 'confirming');
   },
 
-  /**
-   * Handle confirmation
-   */
   async handleConfirmation(phone: string, body: string): Promise<void> {
     const response = body.toLowerCase();
 
     if (response === 'si' || response === 'sí') {
-      // Here we would create the appointment in the database
       const message =
         '✅ ¡Tu reserva ha sido confirmada!\n\n' +
         'Te enviaremos un recordatorio antes de tu cita.\n\n' +
@@ -215,7 +179,6 @@ export const whatsappService = {
       await this.sendMessage(phone, message);
       sessionService.updateState(phone, 'completed');
 
-      // Clean up session after a delay
       setTimeout(() => {
         sessionService.endSession(phone);
       }, 5000);
@@ -235,9 +198,6 @@ export const whatsappService = {
     }
   },
 
-  /**
-   * Send appointment reminder
-   */
   async sendReminder(
     phone: string,
     appointmentDate: string,
@@ -252,9 +212,6 @@ export const whatsappService = {
     await this.sendMessage(phone, message);
   },
 
-  /**
-   * Send appointment confirmation
-   */
   async sendConfirmation(
     phone: string,
     appointmentDate: string,
@@ -271,9 +228,6 @@ export const whatsappService = {
     await this.sendMessage(phone, message);
   },
 
-  /**
-   * Send cancellation notice
-   */
   async sendCancellation(
     phone: string,
     appointmentDate: string,

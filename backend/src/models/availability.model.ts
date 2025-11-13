@@ -1,13 +1,7 @@
 import { z } from 'zod';
 
-/**
- * Time format validation (HH:MM)
- */
 const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
 
-/**
- * Availability validation schema
- */
 export const AvailabilitySchema = z.object({
   id: z.string().uuid().optional(),
   employee_id: z.string().uuid(),
@@ -30,9 +24,6 @@ export const AvailabilitySchema = z.object({
   }
 );
 
-/**
- * Create availability schema
- */
 export const CreateAvailabilitySchema = z.object({
   employee_id: z.string().uuid(),
   day_of_week: z.number().min(0).max(6),
@@ -52,9 +43,6 @@ export const CreateAvailabilitySchema = z.object({
   }
 );
 
-/**
- * Update availability schema
- */
 export const UpdateAvailabilitySchema = z.object({
   employee_id: z.string().uuid().optional(),
   day_of_week: z.number().min(0).max(6).optional(),
@@ -62,9 +50,6 @@ export const UpdateAvailabilitySchema = z.object({
   end_time: z.string().regex(timeRegex, 'Invalid time format (expected HH:MM)').optional(),
 });
 
-/**
- * Time slot schema
- */
 export const TimeSlotSchema = z.object({
   start_time: z.string().datetime(),
   end_time: z.string().datetime(),
@@ -72,9 +57,6 @@ export const TimeSlotSchema = z.object({
   employee_id: z.string().uuid(),
 });
 
-/**
- * Available slots request schema
- */
 export const GetAvailableSlotsSchema = z.object({
   business_id: z.string().uuid(),
   employee_id: z.string().uuid().optional(),
@@ -82,7 +64,6 @@ export const GetAvailableSlotsSchema = z.object({
   duration: z.number().min(15).max(480).default(60), // minutes: 15min to 8 hours
 });
 
-// Type exports
 export type Availability = z.infer<typeof AvailabilitySchema>;
 export type CreateAvailabilityInput = z.infer<typeof CreateAvailabilitySchema>;
 export type UpdateAvailabilityInput = z.infer<typeof UpdateAvailabilitySchema>;

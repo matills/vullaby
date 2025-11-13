@@ -11,11 +11,6 @@ export const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO
 
 export const TWILIO_WHATSAPP_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER || '';
 
-/**
- * Send a WhatsApp message
- * @param to - Recipient phone number (format: whatsapp:+1234567890)
- * @param message - Message body
- */
 export async function sendWhatsAppMessage(to: string, message: string) {
   if (!twilioClient) {
     logger.error('Twilio client not initialized');

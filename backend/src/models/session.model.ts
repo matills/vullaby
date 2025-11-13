@@ -1,8 +1,5 @@
 import { z } from 'zod';
 
-/**
- * Conversation state enum
- */
 export const ConversationStateSchema = z.enum([
   'initial',
   'selecting_service',
@@ -14,9 +11,6 @@ export const ConversationStateSchema = z.enum([
   'cancelled'
 ]);
 
-/**
- * WhatsApp session validation schema
- */
 export const WhatsAppSessionSchema = z.object({
   phone: z.string().min(10),
   state: ConversationStateSchema.default('initial'),
@@ -26,9 +20,6 @@ export const WhatsAppSessionSchema = z.object({
   customer_id: z.string().uuid().optional(),
 });
 
-/**
- * Session data structure for booking flow
- */
 export const SessionDataSchema = z.object({
   business_id: z.string().uuid().optional(),
   customer_id: z.string().uuid().optional(),
@@ -40,9 +31,6 @@ export const SessionDataSchema = z.object({
   notes: z.string().optional(),
 });
 
-/**
- * Incoming WhatsApp message schema
- */
 export const IncomingWhatsAppMessageSchema = z.object({
   From: z.string(),
   To: z.string(),
@@ -52,7 +40,6 @@ export const IncomingWhatsAppMessageSchema = z.object({
   NumMedia: z.string().optional(),
 });
 
-// Type exports
 export type ConversationState = z.infer<typeof ConversationStateSchema>;
 export type WhatsAppSession = z.infer<typeof WhatsAppSessionSchema>;
 export type SessionData = z.infer<typeof SessionDataSchema>;

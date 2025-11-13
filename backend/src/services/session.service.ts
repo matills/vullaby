@@ -1,17 +1,10 @@
 import { WhatsAppSession, ConversationState, SessionData } from '../models';
 import { logger } from '../config/logger';
 
-/**
- * In-memory session storage
- * In production, use Redis or similar
- */
 class SessionStore {
   private sessions: Map<string, WhatsAppSession> = new Map();
   private readonly SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
-  /**
-   * Get session by phone number
-   */
   get(phone: string): WhatsAppSession | null {
     const session = this.sessions.get(phone);
 
@@ -19,7 +12,6 @@ class SessionStore {
       return null;
     }
 
-    // Check if session is expired
     const now = new Date();
     const timeDiff = now.getTime() - session.lastActivity.getTime();
 
@@ -32,9 +24,6 @@ class SessionStore {
     return session;
   }
 
-  /**
-   * Create or update session
-   */
   set(phone: string, session: Partial<WhatsAppSession>): WhatsAppSession {
     const existing = this.sessions.get(phone);
 
@@ -53,9 +42,6 @@ class SessionStore {
     return newSession;
   }
 
-  /**
-   * Update session state
-   */
   updateState(phone: string, state: ConversationState): WhatsAppSession | null {
     const session = this.get(phone);
 
@@ -67,9 +53,6 @@ class SessionStore {
     return this.set(phone, { ...session, state });
   }
 
-  /**
-   * Update session data
-   */
   updateData(phone: string, data: Partial<SessionData>): WhatsAppSession | null {
     const session = this.get(phone);
 
@@ -84,9 +67,6 @@ class SessionStore {
     });
   }
 
-  /**
-   * Delete session
-   */
   delete(phone: string): boolean {
     const deleted = this.sessions.delete(phone);
     if (deleted) {
@@ -95,39 +75,23 @@ class SessionStore {
     return deleted;
   }
 
-  /**
-   * Clear all sessions
-   */
   clear(): void {
     this.sessions.clear();
     logger.info('All sessions cleared');
   }
 
-  /**
-   * Get all active sessions
-   */
   getAllSessions(): WhatsAppSession[] {
     return Array.from(this.sessions.values());
   }
 
-  /**
-   * Get session count
-   */
   getSessionCount(): number {
     return this.sessions.size;
   }
 }
 
-// Export singleton instance
 export const sessionStore = new SessionStore();
 
-/**
- * Session service functions
- */
 export const sessionService = {
-  /**
-   * Get or create session
-   */
   getOrCreateSession(phone: string): WhatsAppSession {
     let session = sessionStore.get(phone);
 
@@ -143,30 +107,18 @@ export const sessionService = {
     return session;
   },
 
-  /**
-   * Update session state
-   */
   updateState(phone: string, state: ConversationState): WhatsAppSession | null {
     return sessionStore.updateState(phone, state);
   },
 
-  /**
-   * Update session data
-   */
   updateData(phone: string, data: Partial<SessionData>): WhatsAppSession | null {
     return sessionStore.updateData(phone, data);
   },
 
-  /**
-   * End session
-   */
   endSession(phone: string): boolean {
     return sessionStore.delete(phone);
   },
 
-  /**
-   * Reset session to initial state
-   */
   resetSession(phone: string): WhatsAppSession {
     return sessionStore.set(phone, {
       phone,
@@ -175,9 +127,6 @@ export const sessionService = {
     });
   },
 
-  /**
-   * Get session statistics
-   */
   getStats() {
     const sessions = sessionStore.getAllSessions();
     const stateCount = sessions.reduce((acc, session) => {

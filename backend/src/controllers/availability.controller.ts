@@ -3,14 +3,7 @@ import { availabilityService } from '../services';
 import { CreateAvailabilitySchema, UpdateAvailabilitySchema, GetAvailableSlotsSchema } from '../models';
 import { logger } from '../config/logger';
 
-/**
- * Availability controller
- */
 export const availabilityController = {
-  /**
-   * Create availability rule
-   * POST /api/availability
-   */
   async create(req: Request, res: Response): Promise<void> {
     try {
       const validationResult = CreateAvailabilitySchema.safeParse(req.body);
@@ -41,10 +34,6 @@ export const availabilityController = {
     }
   },
 
-  /**
-   * Get availability by employee ID
-   * GET /api/availability/employee/:employeeId
-   */
   async getByEmployee(req: Request, res: Response): Promise<void> {
     try {
       const { employeeId } = req.params;
@@ -67,10 +56,6 @@ export const availabilityController = {
     }
   },
 
-  /**
-   * Update availability
-   * PATCH /api/availability/:id
-   */
   async update(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
@@ -106,10 +91,6 @@ export const availabilityController = {
     }
   },
 
-  /**
-   * Delete availability
-   * DELETE /api/availability/:id
-   */
   async delete(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
@@ -129,10 +110,6 @@ export const availabilityController = {
     }
   },
 
-  /**
-   * Get available time slots
-   * GET /api/availability/slots
-   */
   async getSlots(req: Request, res: Response): Promise<void> {
     try {
       const validationResult = GetAvailableSlotsSchema.safeParse({
@@ -174,10 +151,6 @@ export const availabilityController = {
     }
   },
 
-  /**
-   * Check if employee is available
-   * POST /api/availability/check
-   */
   async checkAvailability(req: Request, res: Response): Promise<void> {
     try {
       const { employee_id, start_time, end_time } = req.body;
@@ -214,10 +187,6 @@ export const availabilityController = {
     }
   },
 
-  /**
-   * Get next available slot for employee
-   * GET /api/availability/next-available
-   */
   async getNextAvailable(req: Request, res: Response): Promise<void> {
     try {
       const { employee_id, business_id, duration, days_ahead } = req.query;
@@ -259,10 +228,6 @@ export const availabilityController = {
     }
   },
 
-  /**
-   * Get availability summary for all employees
-   * GET /api/availability/summary
-   */
   async getSummary(req: Request, res: Response): Promise<void> {
     try {
       const { business_id, date, duration } = req.query;

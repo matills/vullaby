@@ -7,14 +7,7 @@ import {
 } from '../models';
 import { logger } from '../config/logger';
 
-/**
- * Appointment controller
- */
 export const appointmentController = {
-  /**
-   * Create new appointment
-   * POST /api/appointments
-   */
   async create(req: Request, res: Response): Promise<void> {
     try {
       const validationResult = CreateAppointmentSchema.safeParse(req.body);
@@ -54,10 +47,6 @@ export const appointmentController = {
     }
   },
 
-  /**
-   * Get appointment by ID
-   * GET /api/appointments/:id
-   */
   async getById(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
@@ -85,10 +74,6 @@ export const appointmentController = {
     }
   },
 
-  /**
-   * Query appointments with filters
-   * GET /api/appointments
-   */
   async query(req: Request, res: Response): Promise<void> {
     try {
       const validationResult = QueryAppointmentsSchema.safeParse(req.query);
@@ -120,10 +105,6 @@ export const appointmentController = {
     }
   },
 
-  /**
-   * Update appointment
-   * PATCH /api/appointments/:id
-   */
   async update(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
@@ -174,10 +155,6 @@ export const appointmentController = {
     }
   },
 
-  /**
-   * Cancel appointment
-   * POST /api/appointments/:id/cancel
-   */
   async cancel(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
@@ -198,10 +175,6 @@ export const appointmentController = {
     }
   },
 
-  /**
-   * Confirm appointment
-   * POST /api/appointments/:id/confirm
-   */
   async confirm(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
@@ -222,10 +195,6 @@ export const appointmentController = {
     }
   },
 
-  /**
-   * Complete appointment
-   * POST /api/appointments/:id/complete
-   */
   async complete(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
@@ -246,10 +215,6 @@ export const appointmentController = {
     }
   },
 
-  /**
-   * Mark as no-show
-   * POST /api/appointments/:id/no-show
-   */
   async markNoShow(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
@@ -270,10 +235,6 @@ export const appointmentController = {
     }
   },
 
-  /**
-   * Delete appointment
-   * DELETE /api/appointments/:id
-   */
   async delete(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
@@ -293,10 +254,6 @@ export const appointmentController = {
     }
   },
 
-  /**
-   * Get upcoming appointments
-   * GET /api/appointments/upcoming
-   */
   async getUpcoming(req: Request, res: Response): Promise<void> {
     try {
       const { business_id, limit } = req.query;
@@ -320,10 +277,6 @@ export const appointmentController = {
     }
   },
 
-  /**
-   * Get appointment statistics
-   * GET /api/appointments/stats
-   */
   async getStats(req: Request, res: Response): Promise<void> {
     try {
       const { business_id, start_date, end_date } = req.query;

@@ -1,8 +1,5 @@
 import { z } from 'zod';
 
-/**
- * Appointment status enum
- */
 export const AppointmentStatusSchema = z.enum([
   'pending',
   'confirmed',
@@ -11,9 +8,6 @@ export const AppointmentStatusSchema = z.enum([
   'no_show'
 ]);
 
-/**
- * Appointment validation schema
- */
 export const AppointmentSchema = z.object({
   id: z.string().uuid().optional(),
   business_id: z.string().uuid(),
@@ -27,9 +21,6 @@ export const AppointmentSchema = z.object({
   updated_at: z.string().datetime().optional(),
 });
 
-/**
- * Create appointment request schema
- */
 export const CreateAppointmentSchema = z.object({
   business_id: z.string().uuid(),
   employee_id: z.string().uuid(),
@@ -45,9 +36,6 @@ export const CreateAppointmentSchema = z.object({
   }
 );
 
-/**
- * Update appointment request schema
- */
 export const UpdateAppointmentSchema = z.object({
   employee_id: z.string().uuid().optional(),
   start_time: z.string().datetime().optional(),
@@ -56,9 +44,6 @@ export const UpdateAppointmentSchema = z.object({
   notes: z.string().optional(),
 });
 
-/**
- * Query appointments schema
- */
 export const QueryAppointmentsSchema = z.object({
   business_id: z.string().uuid().optional(),
   employee_id: z.string().uuid().optional(),
@@ -68,7 +53,6 @@ export const QueryAppointmentsSchema = z.object({
   end_date: z.string().datetime().optional(),
 });
 
-// Type exports
 export type AppointmentStatus = z.infer<typeof AppointmentStatusSchema>;
 export type Appointment = z.infer<typeof AppointmentSchema>;
 export type CreateAppointmentInput = z.infer<typeof CreateAppointmentSchema>;

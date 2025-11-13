@@ -1,0 +1,671 @@
+{
+  "info": {
+    "name": "Lina - Sistema de Turnos",
+    "description": "Colección de requests para probar las APIs del sistema de gestión de turnos vía WhatsApp",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000/api",
+      "type": "string"
+    },
+    {
+      "key": "business_id_barberia",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "business_id_salon",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "employee_id_juan",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "employee_id_carlos",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "employee_id_maria",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customer_id_roberto",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Businesses",
+      "item": [
+        {
+          "name": "Create Business - Barbería",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('business_id_barberia', response.id || response.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Barbería El Corte Perfecto\",\n  \"phone\": \"+54911234567\",\n  \"email\": \"contacto@corteperfecto.com\",\n  \"industry\": \"barbershop\",\n  \"plan\": \"basic\",\n  \"settings\": {\n    \"slot_duration\": 30,\n    \"business_hours\": \"09:00-18:00\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/businesses",
+              "host": ["{{base_url}}"],
+              "path": ["businesses"]
+            }
+          }
+        },
+        {
+          "name": "Create Business - Salón",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('business_id_salon', response.id || response.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Salón de Belleza Glamour\",\n  \"phone\": \"+54911234568\",\n  \"email\": \"info@salonglamour.com\",\n  \"industry\": \"beauty_salon\",\n  \"plan\": \"pro\",\n  \"settings\": {\n    \"slot_duration\": 60,\n    \"business_hours\": \"10:00-20:00\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/businesses",
+              "host": ["{{base_url}}"],
+              "path": ["businesses"]
+            }
+          }
+        },
+        {
+          "name": "Get All Businesses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/businesses",
+              "host": ["{{base_url}}"],
+              "path": ["businesses"]
+            }
+          }
+        },
+        {
+          "name": "Get Business by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id_barberia}}",
+              "host": ["{{base_url}}"],
+              "path": ["businesses", "{{business_id_barberia}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Employees",
+      "item": [
+        {
+          "name": "Create Employee - Juan Pérez",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('employee_id_juan', response.id || response.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"business_id\": \"{{business_id_barberia}}\",\n  \"name\": \"Juan Pérez\",\n  \"phone\": \"+54911111111\",\n  \"email\": \"juan@corteperfecto.com\",\n  \"role\": \"Barbero Senior\",\n  \"is_active\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/employees",
+              "host": ["{{base_url}}"],
+              "path": ["employees"]
+            }
+          }
+        },
+        {
+          "name": "Create Employee - Carlos Gómez",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('employee_id_carlos', response.id || response.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"business_id\": \"{{business_id_barberia}}\",\n  \"name\": \"Carlos Gómez\",\n  \"phone\": \"+54911111112\",\n  \"email\": \"carlos@corteperfecto.com\",\n  \"role\": \"Barbero\",\n  \"is_active\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/employees",
+              "host": ["{{base_url}}"],
+              "path": ["employees"]
+            }
+          }
+        },
+        {
+          "name": "Create Employee - María González",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('employee_id_maria', response.id || response.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"business_id\": \"{{business_id_salon}}\",\n  \"name\": \"María González\",\n  \"phone\": \"+54911111113\",\n  \"email\": \"maria@salonglamour.com\",\n  \"role\": \"Estilista\",\n  \"is_active\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/employees",
+              "host": ["{{base_url}}"],
+              "path": ["employees"]
+            }
+          }
+        },
+        {
+          "name": "Get Employees by Business",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id_barberia}}/employees",
+              "host": ["{{base_url}}"],
+              "path": ["businesses", "{{business_id_barberia}}", "employees"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Customers",
+      "item": [
+        {
+          "name": "Create Customer - Roberto Silva",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('customer_id_roberto', response.id || response.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+54911222221\",\n  \"name\": \"Roberto Silva\",\n  \"email\": \"roberto@email.com\",\n  \"notes\": \"Cliente regular, prefiere cortes clásicos\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/customers",
+              "host": ["{{base_url}}"],
+              "path": ["customers"]
+            }
+          }
+        },
+        {
+          "name": "Create Customer - Ana Torres",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+54911222222\",\n  \"name\": \"Ana Torres\",\n  \"email\": \"ana@email.com\",\n  \"notes\": \"Primera visita\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/customers",
+              "host": ["{{base_url}}"],
+              "path": ["customers"]
+            }
+          }
+        },
+        {
+          "name": "Get Customer by Phone",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/customers/phone/+54911222221",
+              "host": ["{{base_url}}"],
+              "path": ["customers", "phone", "+54911222221"]
+            }
+          }
+        },
+        {
+          "name": "Get All Customers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/customers",
+              "host": ["{{base_url}}"],
+              "path": ["customers"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Availability",
+      "item": [
+        {
+          "name": "Create Availability - Juan Lunes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": \"{{employee_id_juan}}\",\n  \"day_of_week\": 1,\n  \"start_time\": \"09:00\",\n  \"end_time\": \"18:00\",\n  \"slot_duration_minutes\": 30\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/availability",
+              "host": ["{{base_url}}"],
+              "path": ["availability"]
+            }
+          }
+        },
+        {
+          "name": "Batch Create Availability - Juan (L-V)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": \"{{employee_id_juan}}\",\n  \"schedules\": [\n    {\"day_of_week\": 1, \"start_time\": \"09:00\", \"end_time\": \"18:00\", \"slot_duration_minutes\": 30},\n    {\"day_of_week\": 2, \"start_time\": \"09:00\", \"end_time\": \"18:00\", \"slot_duration_minutes\": 30},\n    {\"day_of_week\": 3, \"start_time\": \"09:00\", \"end_time\": \"18:00\", \"slot_duration_minutes\": 30},\n    {\"day_of_week\": 4, \"start_time\": \"09:00\", \"end_time\": \"18:00\", \"slot_duration_minutes\": 30},\n    {\"day_of_week\": 5, \"start_time\": \"09:00\", \"end_time\": \"18:00\", \"slot_duration_minutes\": 30},\n    {\"day_of_week\": 6, \"start_time\": \"09:00\", \"end_time\": \"13:00\", \"slot_duration_minutes\": 30}\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/availability/batch",
+              "host": ["{{base_url}}"],
+              "path": ["availability", "batch"]
+            }
+          }
+        },
+        {
+          "name": "Get Availability by Employee",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/employees/{{employee_id_juan}}/availability",
+              "host": ["{{base_url}}"],
+              "path": ["employees", "{{employee_id_juan}}", "availability"]
+            }
+          }
+        },
+        {
+          "name": "Get Available Slots",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/employees/{{employee_id_juan}}/available-slots?date=2025-11-15",
+              "host": ["{{base_url}}"],
+              "path": ["employees", "{{employee_id_juan}}", "available-slots"],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2025-11-15"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Appointments",
+      "item": [
+        {
+          "name": "Create Appointment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"business_id\": \"{{business_id_barberia}}\",\n  \"employee_id\": \"{{employee_id_juan}}\",\n  \"customer_id\": \"{{customer_id_roberto}}\",\n  \"start_time\": \"2025-11-15T10:00:00-03:00\",\n  \"end_time\": \"2025-11-15T10:30:00-03:00\",\n  \"status\": \"pending\",\n  \"notes\": \"Corte clásico\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/appointments",
+              "host": ["{{base_url}}"],
+              "path": ["appointments"]
+            }
+          }
+        },
+        {
+          "name": "Get Appointments by Business",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id_barberia}}/appointments",
+              "host": ["{{base_url}}"],
+              "path": ["businesses", "{{business_id_barberia}}", "appointments"]
+            }
+          }
+        },
+        {
+          "name": "Get Appointments by Date",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/appointments?date=2025-11-15",
+              "host": ["{{base_url}}"],
+              "path": ["appointments"],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2025-11-15"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Upcoming Appointments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id_barberia}}/appointments/upcoming?hours=24",
+              "host": ["{{base_url}}"],
+              "path": ["businesses", "{{business_id_barberia}}", "appointments", "upcoming"],
+              "query": [
+                {
+                  "key": "hours",
+                  "value": "24"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Appointment Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"confirmed\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/appointments/:appointmentId/status",
+              "host": ["{{base_url}}"],
+              "path": ["appointments", ":appointmentId", "status"],
+              "variable": [
+                {
+                  "key": "appointmentId",
+                  "value": "your-appointment-id"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel Appointment",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/appointments/:appointmentId",
+              "host": ["{{base_url}}"],
+              "path": ["appointments", ":appointmentId"],
+              "variable": [
+                {
+                  "key": "appointmentId",
+                  "value": "your-appointment-id"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "WhatsApp Sessions",
+      "item": [
+        {
+          "name": "Create/Update Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+54911222221\",\n  \"state\": \"selecting_date\",\n  \"data\": {\n    \"business_id\": \"{{business_id_barberia}}\",\n    \"employee_id\": \"{{employee_id_juan}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/whatsapp/sessions",
+              "host": ["{{base_url}}"],
+              "path": ["whatsapp", "sessions"]
+            }
+          }
+        },
+        {
+          "name": "Get Session by Phone",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/whatsapp/sessions/+54911222221",
+              "host": ["{{base_url}}"],
+              "path": ["whatsapp", "sessions", "+54911222221"]
+            }
+          }
+        },
+        {
+          "name": "Clean Old Sessions",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/whatsapp/sessions/clean?hours=24",
+              "host": ["{{base_url}}"],
+              "path": ["whatsapp", "sessions", "clean"],
+              "query": [
+                {
+                  "key": "hours",
+                  "value": "24"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Statistics & Reports",
+      "item": [
+        {
+          "name": "Get Appointments Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/businesses/{{business_id_barberia}}/reports/summary?start_date=2025-11-01&end_date=2025-11-30",
+              "host": ["{{base_url}}"],
+              "path": ["businesses", "{{business_id_barberia}}", "reports", "summary"],
+              "query": [
+                {
+                  "key": "start_date",
+                  "value": "2025-11-01"
+                },
+                {
+                  "key": "end_date",
+                  "value": "2025-11-30"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Employee Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/employees/{{employee_id_juan}}/stats?start_date=2025-11-01&end_date=2025-11-30",
+              "host": ["{{base_url}}"],
+              "path": ["employees", "{{employee_id_juan}}", "stats"],
+              "query": [
+                {
+                  "key": "start_date",
+                  "value": "2025-11-01"
+                },
+                {
+                  "key": "end_date",
+                  "value": "2025-11-30"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Customer History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/customers/{{customer_id_roberto}}/history?limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["customers", "{{customer_id_roberto}}", "history"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -2,16 +2,9 @@ import { supabase } from '../config/supabase';
 import { logger } from '../config/logger';
 import { Customer, CreateCustomerInput, UpdateCustomerInput } from '../models';
 
-/**
- * Customer service for managing customers
- */
 export const customerService = {
-  /**
-   * Create a new customer
-   */
   async createCustomer(data: CreateCustomerInput): Promise<Customer> {
     try {
-      // Check if customer already exists with this phone
       const existing = await this.getCustomerByPhone(data.phone);
 
       if (existing) {
@@ -38,9 +31,6 @@ export const customerService = {
     }
   },
 
-  /**
-   * Get customer by ID
-   */
   async getCustomerById(id: string): Promise<Customer | null> {
     try {
       const { data, error } = await supabase
@@ -63,9 +53,6 @@ export const customerService = {
     }
   },
 
-  /**
-   * Get customer by phone number
-   */
   async getCustomerByPhone(phone: string): Promise<Customer | null> {
     try {
       const { data, error } = await supabase
@@ -88,9 +75,6 @@ export const customerService = {
     }
   },
 
-  /**
-   * Get or create customer by phone
-   */
   async getOrCreateCustomer(phone: string, name?: string): Promise<Customer> {
     try {
       const existing = await this.getCustomerByPhone(phone);
@@ -106,9 +90,6 @@ export const customerService = {
     }
   },
 
-  /**
-   * Update customer
-   */
   async updateCustomer(id: string, data: UpdateCustomerInput): Promise<Customer> {
     try {
       const { data: customer, error } = await supabase
@@ -131,9 +112,6 @@ export const customerService = {
     }
   },
 
-  /**
-   * Delete customer
-   */
   async deleteCustomer(id: string): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -154,9 +132,6 @@ export const customerService = {
     }
   },
 
-  /**
-   * Search customers
-   */
   async searchCustomers(query: string, limit: number = 10): Promise<Customer[]> {
     try {
       const { data, error } = await supabase
@@ -177,9 +152,6 @@ export const customerService = {
     }
   },
 
-  /**
-   * Get customer appointment history
-   */
   async getCustomerHistory(customerId: string) {
     try {
       const { data, error } = await supabase
