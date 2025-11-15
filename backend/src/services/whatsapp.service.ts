@@ -5,6 +5,7 @@ import { IncomingWhatsAppMessage } from '../models';
 import { customerService } from './customer.service';
 import { appointmentService } from './appointment.service';
 import { availabilityService } from './availability.service';
+import { reminderService } from './reminder.service';
 
 // TODO: Hacer este valor dinámico basado en el número de WhatsApp del negocio
 const DEFAULT_BUSINESS_ID = process.env.DEFAULT_BUSINESS_ID || '966d6a45-9111-4a42-b618-2f744ebce14a';
@@ -384,6 +385,22 @@ export const whatsappService = {
           employee: session.data.employee_id,
           start_time: appointment.start_time
         });
+
+        // 3. Programar recordatorios automáticos
+        try {
+          await reminderService.scheduleReminders(
+            appointment.id,
+            phone,
+            session.data.customer_name,
+            session.data.employee_name!,
+            appointment.start_time,
+            appointment.end_time
+          );
+          logger.info(`Reminders scheduled for appointment ${appointment.id}`);
+        } catch (reminderError) {
+          logger.error('Error scheduling reminders:', reminderError);
+          // No fallar la creación de la cita si los recordatorios fallan
+        }
 
         const selectedDate = new Date(session.data.selected_date);
         const startTime = new Date(session.data.selected_start_time!);
