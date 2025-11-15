@@ -132,6 +132,55 @@ export const customerService = {
     }
   },
 
+  async getCustomersByBusiness(businessId: string, limit?: number): Promise<any[]> {
+    try {
+      let query = supabase
+        .from('appointments')
+        .select(`
+          customer_id,
+          customers (
+            id,
+            phone,
+            name,
+            email
+          )
+        `)
+        .eq('business_id', businessId);
+
+      if (limit) {
+        query = query.limit(limit);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        logger.error('Error getting customers by business:', error);
+        throw error;
+      }
+
+      // Get unique customers with appointment count
+      const customerMap = new Map();
+      data?.forEach((appointment: any) => {
+        if (appointment.customers) {
+          const customerId = appointment.customers.id;
+          if (customerMap.has(customerId)) {
+            customerMap.get(customerId).appointmentCount += 1;
+          } else {
+            customerMap.set(customerId, {
+              ...appointment.customers,
+              appointmentCount: 1,
+            });
+          }
+        }
+      });
+
+      return Array.from(customerMap.values());
+    } catch (error) {
+      logger.error('Error in getCustomersByBusiness:', error);
+      throw error;
+    }
+  },
+
   async searchCustomers(query: string, limit: number = 10): Promise<Customer[]> {
     try {
       const { data, error } = await supabase

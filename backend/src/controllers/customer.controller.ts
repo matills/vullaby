@@ -148,12 +148,26 @@ export const customerController = {
 
   async search(req: Request, res: Response): Promise<void> {
     try {
-      const { q, limit } = req.query;
+      const { q, business_id, limit } = req.query;
 
+      // If no search query provided but business_id exists, return all customers for that business
       if (!q || typeof q !== 'string') {
+        if (business_id && typeof business_id === 'string') {
+          const customers = await customerService.getCustomersByBusiness(
+            business_id,
+            limit ? parseInt(limit as string) : undefined
+          );
+          res.json({
+            success: true,
+            data: customers,
+            count: customers.length,
+          });
+          return;
+        }
+
         res.status(400).json({
           success: false,
-          error: 'Search query (q) is required',
+          error: 'Search query (q) or business_id is required',
         });
         return;
       }

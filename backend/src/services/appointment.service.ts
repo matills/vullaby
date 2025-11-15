@@ -274,7 +274,11 @@ export const appointmentService = {
       const now = new Date().toISOString();
       let query = supabase
         .from('appointments')
-        .select('*')
+        .select(`
+          *,
+          customer:customers(id, name, phone, email),
+          employee:employees(id, name, phone, email)
+        `)
         .gte('start_time', now)
         .in('status', ['pending', 'confirmed'])
         .order('start_time', { ascending: true })
@@ -300,35 +304,52 @@ export const appointmentService = {
 
   async getStats(businessId: string, startDate?: string, endDate?: string) {
     try {
-      let query = supabase
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
+
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - now.getDay());
+      weekStart.setHours(0, 0, 0, 0);
+
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
+
+      // Get today's appointments
+      const { data: todayData, error: todayError } = await supabase
         .from('appointments')
-        .select('status')
-        .eq('business_id', businessId);
+        .select('id')
+        .eq('business_id', businessId)
+        .gte('start_time', todayStart)
+        .lte('start_time', todayEnd);
 
-      if (startDate) {
-        query = query.gte('start_time', startDate);
-      }
+      if (todayError) throw todayError;
 
-      if (endDate) {
-        query = query.lte('start_time', endDate);
-      }
+      // Get this week's appointments
+      const { data: weekData, error: weekError } = await supabase
+        .from('appointments')
+        .select('id')
+        .eq('business_id', businessId)
+        .gte('start_time', weekStart.toISOString())
+        .lte('start_time', weekEnd.toISOString());
 
-      const { data, error } = await query;
+      if (weekError) throw weekError;
 
-      if (error) {
-        throw error;
-      }
+      // Get pending appointments
+      const { data: pendingData, error: pendingError } = await supabase
+        .from('appointments')
+        .select('id')
+        .eq('business_id', businessId)
+        .eq('status', 'pending');
 
-      const stats = (data || []).reduce(
-        (acc, appointment) => {
-          acc[appointment.status] = (acc[appointment.status] || 0) + 1;
-          acc.total++;
-          return acc;
-        },
-        { total: 0 } as Record<string, number>
-      );
+      if (pendingError) throw pendingError;
 
-      return stats;
+      return {
+        todayCount: todayData?.length || 0,
+        weekCount: weekData?.length || 0,
+        pendingCount: pendingData?.length || 0,
+      };
     } catch (error) {
       logger.error('Error in getStats:', error);
       throw error;

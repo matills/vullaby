@@ -1,11 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '../services/supabase';
-
-interface User {
-  id: string;
-  email: string;
-  businessId?: string;
-}
+import type { User } from '@/types';
 
 interface AuthState {
   user: User | null;
@@ -14,6 +9,26 @@ interface AuthState {
   logout: () => Promise<void>;
   checkSession: () => Promise<void>;
 }
+
+const getBusinessIdForUser = async (authId: string): Promise<string | undefined> => {
+  try {
+    const { data, error } = await supabase
+      .from('business_users')
+      .select('business_id')
+      .eq('auth_id', authId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching business_id:', error);
+      return undefined;
+    }
+
+    return data?.business_id;
+  } catch (error) {
+    console.error('Error in getBusinessIdForUser:', error);
+    return undefined;
+  }
+};
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
@@ -28,10 +43,17 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (error) throw error;
 
     if (data.user) {
+      const businessId = await getBusinessIdForUser(data.user.id);
+
+      if (businessId) {
+        localStorage.setItem('businessId', businessId);
+      }
+
       set({
         user: {
           id: data.user.id,
           email: data.user.email!,
+          businessId,
         },
       });
     }
@@ -39,6 +61,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     await supabase.auth.signOut();
+    localStorage.removeItem('businessId');
     set({ user: null });
   },
 
@@ -47,10 +70,17 @@ export const useAuthStore = create<AuthState>((set) => ({
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
+        const businessId = await getBusinessIdForUser(session.user.id);
+
+        if (businessId) {
+          localStorage.setItem('businessId', businessId);
+        }
+
         set({
           user: {
             id: session.user.id,
             email: session.user.email!,
+            businessId,
           },
           loading: false,
         });

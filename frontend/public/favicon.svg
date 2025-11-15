@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <defs>
+    <linearGradient id="birdGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#06b6d4;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <path d="M16 7h.01" stroke="url(#birdGradient)"/>
+  <path d="M3.4 18H12a8 8 0 0 0 8-8V7a4 4 0 0 0-7.28-2.3L2 20" stroke="url(#birdGradient)"/>
+  <path d="m20 7 2 .5-2 .5" stroke="url(#birdGradient)"/>
+  <path d="M10 18v3" stroke="url(#birdGradient)"/>
+  <path d="M14 17.75V21" stroke="url(#birdGradient)"/>
+  <path d="M7 18a6 6 0 0 0 3.84-10.61" stroke="url(#birdGradient)"/>
+</svg>
