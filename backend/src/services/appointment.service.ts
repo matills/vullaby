@@ -6,6 +6,7 @@ import {
   UpdateAppointmentInput,
   QueryAppointmentsInput,
 } from '../models';
+import { reminderService } from './reminder.service';
 
 export const appointmentService = {
   async createAppointment(data: CreateAppointmentInput): Promise<Appointment> {
@@ -156,7 +157,18 @@ export const appointmentService = {
 
   async cancelAppointment(id: string): Promise<Appointment> {
     try {
-      return await this.updateAppointment(id, { status: 'cancelled' });
+      const result = await this.updateAppointment(id, { status: 'cancelled' });
+
+      // Cancelar recordatorios programados
+      try {
+        await reminderService.cancelReminders(id);
+        logger.info(`Reminders cancelled for appointment ${id}`);
+      } catch (reminderError) {
+        logger.error('Error cancelling reminders:', reminderError);
+        // No fallar la cancelación de la cita si los recordatorios fallan
+      }
+
+      return result;
     } catch (error) {
       logger.error('Error in cancelAppointment:', error);
       throw error;
