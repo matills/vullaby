@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const ConversationStateSchema = z.enum([
   'initial',
+  'asking_name',
   'selecting_service',
   'selecting_employee',
   'selecting_date',
@@ -23,9 +24,16 @@ export const WhatsAppSessionSchema = z.object({
 export const SessionDataSchema = z.object({
   business_id: z.string().uuid().optional(),
   customer_id: z.string().uuid().optional(),
+  customer_name: z.string().optional(),
   employee_id: z.string().uuid().optional(),
+  employee_name: z.string().optional(),
+  employees: z.array(z.any()).optional(),
   selected_date: z.string().optional(),
   selected_time: z.string().optional(),
+  selected_start_time: z.string().optional(),
+  selected_end_time: z.string().optional(),
+  selected_slot: z.any().optional(),
+  available_slots: z.array(z.any()).optional(),
   duration: z.number().optional(),
   service_name: z.string().optional(),
   notes: z.string().optional(),
