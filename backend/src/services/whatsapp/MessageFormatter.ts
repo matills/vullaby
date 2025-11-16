@@ -192,7 +192,7 @@ export class MessageFormatter {
 
     message += (
       `\n🔔 Te recordaré 24 horas antes.\n\n` +
-      `Para cancelar, escribe: *cancelar ${appointment.id.substring(0, 8)}*`
+      `Para cancelar, escribe *"cancelar turno"* en cualquier momento.`
     );
 
     return message;

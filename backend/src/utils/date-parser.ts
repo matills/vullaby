@@ -44,13 +44,67 @@ export function parseNaturalDate(input: string): Date | null {
     return getNextWeekday(weekday);
   }
 
-  // Caso 5: Formato DD/MM/YYYY
-  const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+  // Caso 5: Formato "X de mes" o "primero de mes"
+  const monthNameMatch = normalizedInput.match(
+    /^(primero|primer|segundo|tercero|\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)(\s+\d{2,4})?$/
+  );
+
+  if (monthNameMatch) {
+    const dayStr = monthNameMatch[1];
+    const monthName = monthNameMatch[2];
+    const yearStr = monthNameMatch[3]?.trim();
+
+    // Convertir "primero" a número
+    const dayNumber = convertWordToNumber(dayStr);
+    if (dayNumber === null || dayNumber < 1 || dayNumber > 31) {
+      return null;
+    }
+
+    // Convertir nombre de mes a número
+    const monthNumber = convertMonthNameToNumber(monthName);
+    if (monthNumber === null) {
+      return null;
+    }
+
+    // Determinar año
+    const currentYear = new Date().getFullYear();
+    let year = currentYear;
+    if (yearStr) {
+      const parsedYear = parseInt(yearStr);
+      year = parsedYear < 100 ? 2000 + parsedYear : parsedYear;
+    }
+
+    const date = new Date(year, monthNumber - 1, dayNumber);
+    date.setHours(0, 0, 0, 0);
+
+    // Si la fecha ya pasó este año, usar el próximo año
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (date < today && !yearStr) {
+      date.setFullYear(currentYear + 1);
+    }
+
+    if (isNaN(date.getTime())) {
+      return null;
+    }
+
+    return date;
+  }
+
+  // Caso 6: Formato DD/MM/YYYY o DD/MM/YY
+  const dateRegex = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/;
   const match = normalizedInput.match(dateRegex);
 
   if (match) {
-    const [, day, month, year] = match;
-    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    const [, day, month, yearStr] = match;
+    let year = parseInt(yearStr);
+
+    // Si el año tiene 2 dígitos, convertir a 4 dígitos
+    if (year < 100) {
+      year = 2000 + year;
+    }
+
+    const date = new Date(year, parseInt(month) - 1, parseInt(day));
     date.setHours(0, 0, 0, 0);
 
     // Validar que la fecha sea válida
@@ -139,9 +193,70 @@ export function isValidAppointmentDate(date: Date): { valid: boolean; error?: st
 }
 
 /**
+ * Convierte palabras numéricas a números
+ */
+function convertWordToNumber(word: string): number | null {
+  const normalized = word.toLowerCase().trim();
+
+  const wordMap: Record<string, number> = {
+    'primero': 1,
+    'primer': 1,
+    'segundo': 2,
+    'tercero': 3,
+    'cuarto': 4,
+    'quinto': 5,
+    'sexto': 6,
+    'séptimo': 7,
+    'septimo': 7,
+    'octavo': 8,
+    'noveno': 9,
+    'décimo': 10,
+    'decimo': 10,
+  };
+
+  // Si es palabra, buscar en el mapa
+  if (wordMap[normalized] !== undefined) {
+    return wordMap[normalized];
+  }
+
+  // Si es número, convertir
+  const num = parseInt(normalized);
+  if (!isNaN(num)) {
+    return num;
+  }
+
+  return null;
+}
+
+/**
+ * Convierte nombre de mes a número (1-12)
+ */
+function convertMonthNameToNumber(monthName: string): number | null {
+  const normalized = monthName.toLowerCase().trim();
+
+  const monthMap: Record<string, number> = {
+    'enero': 1,
+    'febrero': 2,
+    'marzo': 3,
+    'abril': 4,
+    'mayo': 5,
+    'junio': 6,
+    'julio': 7,
+    'agosto': 8,
+    'septiembre': 9,
+    'octubre': 10,
+    'noviembre': 11,
+    'diciembre': 12,
+  };
+
+  return monthMap[normalized] ?? null;
+}
+
+/**
  * Ejemplos de formatos aceptados
  */
 export const SUPPORTED_DATE_FORMATS = `Puedes escribir:
 • Días relativos: "hoy", "mañana"
 • Días de la semana: "lunes", "martes", "próximo viernes"
-• Fecha específica: DD/MM/YYYY (ejemplo: 25/12/2024)`;
+• Fecha con mes: "1 de diciembre", "primero de enero"
+• Fecha específica: DD/MM/YYYY o DD/MM/YY (ejemplo: 25/12/2024 o 1/12/25)`;

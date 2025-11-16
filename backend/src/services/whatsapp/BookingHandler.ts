@@ -55,8 +55,20 @@ export class BookingHandler {
         collected_data: extractedData
       });
 
+      // Auto-select if only one employee
+      if (employees.length === 1 && !extractedData.employeeId) {
+        const employee = employees[0];
+        extractedData.employeeId = employee.id;
+        extractedData.employeeName = employee.name;
+
+        // Send confirmation message
+        await this.sendMessage(
+          phone,
+          `Te agendaré con ${employee.name}${employee.role ? ` (${employee.role})` : ''}.`
+        );
+      }
       // Check if employee name was extracted
-      if (extractedData.employeeName) {
+      else if (extractedData.employeeName) {
         const employee = this.dataExtractor.findEmployeeByName(
           employees,
           extractedData.employeeName
@@ -220,7 +232,19 @@ export class BookingHandler {
       case 'time': {
         // First check if we have available slots to show
         if (collectedData.date && collectedData.employeeId) {
-          // Try to extract time from message
+          // Get available slots
+          const slots = await this.getAvailableSlots(collectedData.employeeId, collectedData.date);
+
+          // Try to extract selection number first
+          const selection = this.dataExtractor.extractSelection(message, slots.length);
+
+          if (selection && selection >= 1 && selection <= slots.length) {
+            collectedData.time = slots[selection - 1];
+            this.sessionService.updateData(phone, { collected_data: collectedData });
+            return true;
+          }
+
+          // If no selection number, try to extract time from message
           const time = this.dataExtractor.extractBookingData(message).time;
 
           if (time) {
@@ -250,7 +274,7 @@ export class BookingHandler {
             if (!isAvailable) {
               await this.sendMessage(
                 phone,
-                'Ese horario no está disponible. Por favor elige otro.'
+                'Ese horario no está disponible. Por favor elige otro del listado.'
               );
               // Show available slots
               await this.showAvailableSlots(phone, collectedData.employeeId, collectedData.date);
@@ -262,19 +286,9 @@ export class BookingHandler {
             return true;
           }
 
-          // Try to extract selection number
-          const slots = await this.getAvailableSlots(collectedData.employeeId, collectedData.date);
-          const selection = this.dataExtractor.extractSelection(message, slots.length);
-
-          if (selection && selection >= 1 && selection <= slots.length) {
-            collectedData.time = slots[selection - 1];
-            this.sessionService.updateData(phone, { collected_data: collectedData });
-            return true;
-          }
-
           await this.sendMessage(
             phone,
-            'Por favor elige un horario del listado o escribe una hora específica.'
+            'Por favor elige un número del listado o escribe una hora específica.'
           );
           return false;
         }

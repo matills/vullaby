@@ -181,6 +181,13 @@ export class WhatsAppService {
         business_id: DEFAULT_BUSINESS_ID
       });
 
+      // Check if message is a menu selection (1, 2, 3, 4)
+      const menuSelection = this.detectMenuSelection(body);
+      if (menuSelection) {
+        await this.handleMenuSelection(phone, menuSelection, existingCustomer.id);
+        return;
+      }
+
       // Detect intent from message
       const intent = this.intentDetector.detectIntent(body);
       logger.info('Detected intent', { phone, intent });
@@ -251,6 +258,64 @@ export class WhatsAppService {
     const message = MessageFormatter.formatWelcome(customerName);
     await this.sendMessage(phone, message);
     sessionService.updateState(phone, 'intent_detected');
+  }
+
+  /**
+   * Detect if message is a menu selection (1, 2, 3, 4)
+   */
+  private detectMenuSelection(message: string): number | null {
+    const trimmed = message.trim();
+    const num = parseInt(trimmed);
+
+    if (!isNaN(num) && num >= 1 && num <= 4) {
+      return num;
+    }
+
+    return null;
+  }
+
+  /**
+   * Handle menu selection
+   */
+  private async handleMenuSelection(
+    phone: string,
+    selection: number,
+    customerId: string
+  ): Promise<void> {
+    switch (selection) {
+      case 1: // Agendar un turno
+        await this.bookingHandler.startBooking(phone, '', DEFAULT_BUSINESS_ID);
+        break;
+
+      case 2: // Cancelar un turno
+        await this.cancellationHandler.startCancellation(phone, customerId);
+        break;
+
+      case 3: // Ver mis turnos
+        await this.viewHandler.showAppointments(phone, customerId);
+        break;
+
+      case 4: // Hablar con alguien
+        await this.handleTalkToSomeone(phone, customerId);
+        break;
+
+      default:
+        await this.showWelcomeMenu(phone, sessionService.getOrCreateSession(phone).data.customer_name);
+    }
+  }
+
+  /**
+   * Handle "talk to someone" request
+   */
+  private async handleTalkToSomeone(phone: string, customerId: string): Promise<void> {
+    // TODO: Implement notification to business
+    await this.sendMessage(
+      phone,
+      '📞 Solicitud recibida.\n\n' +
+      'Un miembro de nuestro equipo se pondrá en contacto contigo pronto.\n\n' +
+      '¿Necesitas algo más? Escribe "inicio" para volver al menú.'
+    );
+    sessionService.resetSession(phone);
   }
 
   /**

@@ -162,9 +162,17 @@ class AppointmentService extends BaseService<Appointment> {
   /**
    * Custom method: Query appointments with filters
    */
-  async queryAppointments(filters: QueryAppointmentsInput): Promise<Appointment[]> {
+  async queryAppointments(filters: QueryAppointmentsInput, includeRelations: boolean = false): Promise<Appointment[]> {
     try {
-      let query = this.supabase.from(this.tableName).select('*');
+      const selectQuery = includeRelations
+        ? `
+          *,
+          customer:customers(id, name, phone, email),
+          employee:employees(id, name, phone, email, role)
+        `
+        : '*';
+
+      let query = this.supabase.from(this.tableName).select(selectQuery);
 
       if (filters.business_id) {
         query = query.eq('business_id', filters.business_id);
@@ -197,7 +205,14 @@ class AppointmentService extends BaseService<Appointment> {
         throw error;
       }
 
-      return data || [];
+      // Map employee data to employee_name for backward compatibility
+      const mappedData = (data || []).map(apt => ({
+        ...apt,
+        employee_name: apt.employee?.name || null,
+        customer_name: apt.customer?.name || null,
+      }));
+
+      return mappedData;
     } catch (error) {
       logger.error('Error in queryAppointments:', error);
       throw error;
@@ -225,7 +240,7 @@ class AppointmentService extends BaseService<Appointment> {
   async getAppointmentsByCustomer(customerId: string): Promise<Appointment[]> {
     return this.queryAppointments({
       customer_id: customerId,
-    });
+    }, true); // Include employee and customer relations
   }
 
   /**
