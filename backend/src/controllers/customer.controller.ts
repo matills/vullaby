@@ -1,70 +1,26 @@
 import { Request, Response } from 'express';
-import { customerService } from '../services';
+import { customerService } from '../services/customer.service';
 import {
   CreateCustomerSchema,
   UpdateCustomerSchema,
 } from '../models';
 import { logger } from '../config/logger';
+import { BaseController } from '../core/base.controller';
+import { Customer, CreateCustomerInput, UpdateCustomerInput } from '../models';
 
-export const customerController = {
-  async create(req: Request, res: Response): Promise<void> {
-    try {
-      const validationResult = CreateCustomerSchema.safeParse(req.body);
+/**
+ * Customer controller extending BaseController
+ * Reduces ~150 lines of boilerplate code while maintaining custom endpoints
+ */
+class CustomerController extends BaseController<Customer, CreateCustomerInput, UpdateCustomerInput> {
+  protected entityName = 'Customer';
+  protected service = customerService;
+  protected createSchema = CreateCustomerSchema;
+  protected updateSchema = UpdateCustomerSchema;
 
-      if (!validationResult.success) {
-        res.status(400).json({
-          success: false,
-          error: 'Validation failed',
-          details: validationResult.error.issues,
-        });
-        return;
-      }
-
-      const customer = await customerService.createCustomer(
-        validationResult.data
-      );
-
-      res.status(201).json({
-        success: true,
-        data: customer,
-      });
-    } catch (error: any) {
-      logger.error('Error creating customer:', error);
-
-      res.status(500).json({
-        success: false,
-        error: 'Failed to create customer',
-      });
-    }
-  },
-
-  async getById(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-
-      const customer = await customerService.getCustomerById(id);
-
-      if (!customer) {
-        res.status(404).json({
-          success: false,
-          error: 'Customer not found',
-        });
-        return;
-      }
-
-      res.json({
-        success: true,
-        data: customer,
-      });
-    } catch (error) {
-      logger.error('Error getting customer:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to get customer',
-      });
-    }
-  },
-
+  /**
+   * Custom endpoint: Get customer by phone number
+   */
   async getByPhone(req: Request, res: Response): Promise<void> {
     try {
       const { phone } = req.params;
@@ -90,62 +46,11 @@ export const customerController = {
         error: 'Failed to get customer',
       });
     }
-  },
+  }
 
-  async update(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-
-      const validationResult = UpdateCustomerSchema.safeParse(req.body);
-
-      if (!validationResult.success) {
-        res.status(400).json({
-          success: false,
-          error: 'Validation failed',
-          details: validationResult.error.issues,
-        });
-        return;
-      }
-
-      const customer = await customerService.updateCustomer(
-        id,
-        validationResult.data
-      );
-
-      res.json({
-        success: true,
-        data: customer,
-      });
-    } catch (error: any) {
-      logger.error('Error updating customer:', error);
-
-      res.status(500).json({
-        success: false,
-        error: 'Failed to update customer',
-      });
-    }
-  },
-
-  async delete(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-
-      await customerService.deleteCustomer(id);
-
-      res.json({
-        success: true,
-        message: 'Customer deleted successfully',
-      });
-    } catch (error: any) {
-      logger.error('Error deleting customer:', error);
-
-      res.status(500).json({
-        success: false,
-        error: 'Failed to delete customer',
-      });
-    }
-  },
-
+  /**
+   * Override search to support business filtering
+   */
   async search(req: Request, res: Response): Promise<void> {
     try {
       const { q, business_id, limit } = req.query;
@@ -172,7 +77,7 @@ export const customerController = {
         return;
       }
 
-      const customers = await customerService.searchCustomers(
+      const customers = await customerService.search(
         q,
         limit ? parseInt(limit as string) : undefined
       );
@@ -189,13 +94,16 @@ export const customerController = {
         error: 'Failed to search customers',
       });
     }
-  },
+  }
 
+  /**
+   * Custom endpoint: Get customer appointment history
+   */
   async getHistory(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
 
-      const customer = await customerService.getCustomerById(id);
+      const customer = await customerService.getById(id);
       if (!customer) {
         res.status(404).json({
           success: false,
@@ -218,5 +126,17 @@ export const customerController = {
         error: 'Failed to get customer history',
       });
     }
-  },
+  }
+}
+
+// Export singleton instance configured as object for backward compatibility
+const controller = new CustomerController();
+export const customerController = {
+  create: controller.create.bind(controller),
+  getById: controller.getById.bind(controller),
+  getByPhone: controller.getByPhone.bind(controller),
+  update: controller.update.bind(controller),
+  delete: controller.delete.bind(controller),
+  search: controller.search.bind(controller),
+  getHistory: controller.getHistory.bind(controller),
 };

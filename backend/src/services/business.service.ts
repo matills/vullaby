@@ -6,85 +6,72 @@ import {
   UpdateBusinessInput,
   QueryBusinessesInput,
 } from '../models';
+import { BaseService } from '../core/base.service';
+import { NotFoundError, ConflictError } from '../core/errors';
 
-export const businessService = {
-  async createBusiness(data: CreateBusinessInput): Promise<Business> {
+/**
+ * BusinessService extending BaseService
+ * Reduces ~150 lines of boilerplate while maintaining custom functionality
+ */
+class BusinessService extends BaseService<Business> {
+  protected tableName = 'businesses';
+  protected entityName = 'Business';
+
+  constructor() {
+    super(supabase);
+  }
+
+  /**
+   * Override create to ensure unique phone number
+   */
+  async create(data: CreateBusinessInput): Promise<Business> {
     try {
       const existing = await this.getBusinessByPhone(data.phone);
 
       if (existing) {
         logger.warn(`Business already exists with phone ${data.phone}`);
-        throw new Error('Business with this phone number already exists');
+        throw new ConflictError('Business with this phone number already exists');
       }
 
-      const { data: business, error } = await supabase
-        .from('businesses')
-        .insert(data)
-        .select()
-        .single();
-
-      if (error) {
-        logger.error('Error creating business:', error);
-        throw error;
-      }
-
-      logger.info(`Business created: ${business.name} (ID: ${business.id}, Phone: ${business.phone})`);
-      return business;
+      return await super.create(data);
     } catch (error) {
       logger.error('Error in createBusiness:', error);
       throw error;
     }
-  },
+  }
 
-  async getBusinessById(id: string): Promise<Business | null> {
+  /**
+   * Override update to validate phone uniqueness
+   */
+  async update(id: string, data: UpdateBusinessInput): Promise<Business> {
     try {
-      const { data, error } = await supabase
-        .from('businesses')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          return null;
-        }
-        throw error;
+      // Check if business exists
+      const existing = await this.getById(id);
+      if (!existing) {
+        throw new NotFoundError(this.entityName);
       }
 
-      return data;
-    } catch (error) {
-      logger.error('Error in getBusinessById:', error);
-      throw error;
-    }
-  },
-
-  async getBusinessByPhone(phone: string): Promise<Business | null> {
-    try {
-      const { data, error } = await supabase
-        .from('businesses')
-        .select('*')
-        .eq('phone', phone)
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          return null;
+      // If phone is being updated, check for conflicts
+      if (data.phone && data.phone !== existing.phone) {
+        const phoneExists = await this.getBusinessByPhone(data.phone);
+        if (phoneExists) {
+          throw new ConflictError('Business with this phone number already exists');
         }
-        throw error;
       }
 
-      return data;
+      return await super.update(id, data);
     } catch (error) {
-      logger.error('Error in getBusinessByPhone:', error);
+      logger.error('Error in updateBusiness:', error);
       throw error;
     }
-  },
+  }
 
-  async getAllBusinesses(
-    filters?: QueryBusinessesInput
-  ): Promise<Business[]> {
+  /**
+   * Override getAll to support custom filtering
+   */
+  async getAll(filters?: QueryBusinessesInput): Promise<Business[]> {
     try {
-      let query = supabase.from('businesses').select('*');
+      let query = this.supabase.from(this.tableName).select('*');
 
       if (filters?.industry) {
         query = query.eq('industry', filters.industry);
@@ -113,103 +100,72 @@ export const businessService = {
       const { data, error } = await query;
 
       if (error) {
-        logger.error('Error getting all businesses:', error);
+        logger.error(`Error getting all ${this.entityName}es:`, error);
         throw error;
       }
 
       return data || [];
     } catch (error) {
-      logger.error('Error in getAllBusinesses:', error);
+      logger.error(`Error in getAll${this.entityName}es:`, error);
       throw error;
     }
-  },
+  }
 
-  async updateBusiness(
-    id: string,
-    data: UpdateBusinessInput
-  ): Promise<Business> {
+  /**
+   * Override search to include industry
+   */
+  async search(query: string, limit: number = 10): Promise<Business[]> {
     try {
-      const existing = await this.getBusinessById(id);
-      if (!existing) {
-        throw new Error('Business not found');
-      }
-
-      if (data.phone && data.phone !== existing.phone) {
-        const phoneExists = await this.getBusinessByPhone(data.phone);
-        if (phoneExists) {
-          throw new Error('Business with this phone number already exists');
-        }
-      }
-
-      const { data: business, error } = await supabase
-        .from('businesses')
-        .update(data)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) {
-        logger.error('Error updating business:', error);
-        throw error;
-      }
-
-      logger.info(`Business updated: ${business.name} (ID: ${id})`);
-      return business;
-    } catch (error) {
-      logger.error('Error in updateBusiness:', error);
-      throw error;
-    }
-  },
-
-  async deleteBusiness(id: string): Promise<boolean> {
-    try {
-      const existing = await this.getBusinessById(id);
-      if (!existing) {
-        throw new Error('Business not found');
-      }
-
-      const { error } = await supabase
-        .from('businesses')
-        .delete()
-        .eq('id', id);
-
-      if (error) {
-        logger.error('Error deleting business:', error);
-        throw error;
-      }
-
-      logger.info(`Business deleted: ${existing.name} (ID: ${id})`);
-      return true;
-    } catch (error) {
-      logger.error('Error in deleteBusiness:', error);
-      throw error;
-    }
-  },
-
-  async searchBusinesses(query: string, limit: number = 10): Promise<Business[]> {
-    try {
-      const { data, error } = await supabase
-        .from('businesses')
+      const { data, error } = await this.supabase
+        .from(this.tableName)
         .select('*')
         .or(`name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%,industry.ilike.%${query}%`)
         .limit(limit)
         .order('name', { ascending: true });
 
       if (error) {
-        logger.error('Error searching businesses:', error);
+        logger.error(`Error searching ${this.entityName}es:`, error);
         throw error;
       }
 
       return data || [];
     } catch (error) {
-      logger.error('Error in searchBusinesses:', error);
+      logger.error(`Error in search${this.entityName}es:`, error);
       throw error;
     }
-  },
+  }
 
+  /**
+   * Custom method: Get business by phone number
+   */
+  async getBusinessByPhone(phone: string): Promise<Business | null> {
+    try {
+      const { data, error } = await this.supabase
+        .from(this.tableName)
+        .select('*')
+        .eq('phone', phone)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          return null;
+        }
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      logger.error('Error in getBusinessByPhone:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Custom method: Get all employees for a business
+   */
   async getBusinessEmployees(businessId: string) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase
         .from('employees')
         .select('*')
         .eq('business_id', businessId)
@@ -225,15 +181,18 @@ export const businessService = {
       logger.error('Error in getBusinessEmployees:', error);
       throw error;
     }
-  },
+  }
 
+  /**
+   * Custom method: Get all appointments for a business
+   */
   async getBusinessAppointments(
     businessId: string,
     startDate?: string,
     endDate?: string
   ) {
     try {
-      let query = supabase
+      let query = this.supabase
         .from('appointments')
         .select('*, employees(name), customers(name, phone)')
         .eq('business_id', businessId);
@@ -260,8 +219,11 @@ export const businessService = {
       logger.error('Error in getBusinessAppointments:', error);
       throw error;
     }
-  },
+  }
 
+  /**
+   * Custom method: Get business statistics
+   */
   async getBusinessStats(businessId: string) {
     try {
       const [employees, appointments] = await Promise.all([
@@ -292,5 +254,17 @@ export const businessService = {
       logger.error('Error in getBusinessStats:', error);
       throw error;
     }
-  },
-};
+  }
+
+  // Alias methods for backward compatibility
+  createBusiness = this.create;
+  getBusinessById = this.getById;
+  getAllBusinesses = this.getAll;
+  updateBusiness = this.update;
+  deleteBusiness = this.delete;
+  searchBusinesses = this.search;
+}
+
+// Export class and singleton instance
+export { BusinessService };
+export const businessService = new BusinessService();

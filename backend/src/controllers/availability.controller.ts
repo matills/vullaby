@@ -1,146 +1,73 @@
 import { Request, Response } from 'express';
-import { availabilityService } from '../services';
-import { CreateAvailabilitySchema, UpdateAvailabilitySchema, GetAvailableSlotsSchema } from '../models';
+import { availabilityService } from '../services/availability.service';
+import {
+  CreateAvailabilitySchema,
+  UpdateAvailabilitySchema,
+  Availability,
+  CreateAvailabilityInput,
+  UpdateAvailabilityInput,
+} from '../models';
 import { logger } from '../config/logger';
+import { BaseController } from '../core/base.controller';
 
-export const availabilityController = {
-  async create(req: Request, res: Response): Promise<void> {
-    try {
-      const validationResult = CreateAvailabilitySchema.safeParse(req.body);
+/**
+ * AvailabilityController extending BaseController
+ * Reduces ~160+ lines of boilerplate while maintaining custom endpoints
+ */
+class AvailabilityController extends BaseController<Availability, CreateAvailabilityInput, UpdateAvailabilityInput> {
+  protected entityName = 'Availability';
+  protected service = availabilityService;
+  protected createSchema = CreateAvailabilitySchema;
+  protected updateSchema = UpdateAvailabilitySchema;
 
-      if (!validationResult.success) {
-        res.status(400).json({
-          success: false,
-          error: 'Validation failed',
-          details: validationResult.error.issues,
-        });
-        return;
-      }
-
-      const availability = await availabilityService.createAvailability(
-        validationResult.data
-      );
-
-      res.status(201).json({
-        success: true,
-        data: availability,
-      });
-    } catch (error) {
-      logger.error('Error creating availability:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to create availability',
-      });
-    }
-  },
-
+  /**
+   * Custom endpoint: Get availability by employee
+   */
   async getByEmployee(req: Request, res: Response): Promise<void> {
     try {
       const { employeeId } = req.params;
+      const availabilities = await availabilityService.getAvailabilityByEmployee(employeeId);
 
-      const availability = await availabilityService.getAvailabilityByEmployee(
-        employeeId
-      );
-
-      res.json({
+      res.status(200).json({
         success: true,
-        data: availability,
-        count: availability.length,
+        data: availabilities,
+        count: availabilities.length
       });
     } catch (error) {
-      logger.error('Error getting availability:', error);
+      logger.error('Error getting availability by employee:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to get availability',
       });
     }
-  },
+  }
 
-  async update(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-
-      const validationResult = UpdateAvailabilitySchema.safeParse(
-        req.body
-      );
-
-      if (!validationResult.success) {
-        res.status(400).json({
-          success: false,
-          error: 'Validation failed',
-          details: validationResult.error.issues,
-        });
-        return;
-      }
-
-      const availability = await availabilityService.updateAvailability(
-        id,
-        validationResult.data
-      );
-
-      res.json({
-        success: true,
-        data: availability,
-      });
-    } catch (error) {
-      logger.error('Error updating availability:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to update availability',
-      });
-    }
-  },
-
-  async delete(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-
-      await availabilityService.deleteAvailability(id);
-
-      res.json({
-        success: true,
-        message: 'Availability deleted successfully',
-      });
-    } catch (error) {
-      logger.error('Error deleting availability:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to delete availability',
-      });
-    }
-  },
-
+  /**
+   * Custom endpoint: Get available time slots
+   */
   async getSlots(req: Request, res: Response): Promise<void> {
     try {
-      const validationResult = GetAvailableSlotsSchema.safeParse({
-        business_id: req.query.business_id,
-        employee_id: req.query.employee_id,
-        date: req.query.date,
-        duration: req.query.duration ? parseInt(req.query.duration as string) : 60,
-      });
+      const { employeeId } = req.params;
+      const { date, duration } = req.query;
 
-      if (!validationResult.success) {
+      if (!date) {
         res.status(400).json({
           success: false,
-          error: 'Invalid query parameters',
-          details: validationResult.error.issues,
+          error: 'date is required',
         });
         return;
       }
 
       const slots = await availabilityService.getAvailableSlots(
-        validationResult.data
+        employeeId,
+        new Date(date as string),
+        duration ? parseInt(duration as string) : 60
       );
 
-      const availableSlots = slots.filter((slot) => slot.available);
-
-      res.json({
+      res.status(200).json({
         success: true,
-        data: {
-          slots: availableSlots,
-          total: slots.length,
-          available: availableSlots.length,
-        },
+        data: slots,
+        count: slots.length
       });
     } catch (error) {
       logger.error('Error getting available slots:', error);
@@ -149,34 +76,33 @@ export const availabilityController = {
         error: 'Failed to get available slots',
       });
     }
-  },
+  }
 
+  /**
+   * Custom endpoint: Check if employee is available
+   */
   async checkAvailability(req: Request, res: Response): Promise<void> {
     try {
-      const { employee_id, start_time, end_time } = req.body;
+      const { employeeId } = req.params;
+      const { start_time, end_time } = req.query;
 
-      if (!employee_id || !start_time || !end_time) {
+      if (!start_time || !end_time) {
         res.status(400).json({
           success: false,
-          error: 'Missing required fields: employee_id, start_time, end_time',
+          error: 'start_time and end_time are required',
         });
         return;
       }
 
-      const isAvailable = await availabilityService.isEmployeeAvailable(
-        employee_id,
-        start_time,
-        end_time
+      const available = await availabilityService.isEmployeeAvailable(
+        employeeId,
+        new Date(start_time as string),
+        new Date(end_time as string)
       );
 
-      res.json({
+      res.status(200).json({
         success: true,
-        data: {
-          available: isAvailable,
-          employee_id,
-          start_time,
-          end_time,
-        },
+        data: { available }
       });
     } catch (error) {
       logger.error('Error checking availability:', error);
@@ -185,39 +111,34 @@ export const availabilityController = {
         error: 'Failed to check availability',
       });
     }
-  },
+  }
 
+  /**
+   * Custom endpoint: Get next available slot
+   */
   async getNextAvailable(req: Request, res: Response): Promise<void> {
     try {
-      const { employee_id, business_id, duration, days_ahead } = req.query;
-
-      if (!employee_id || !business_id) {
-        res.status(400).json({
-          success: false,
-          error: 'Missing required parameters: employee_id, business_id',
-        });
-        return;
-      }
+      const { employeeId } = req.params;
+      const { from_date, duration, max_days } = req.query;
 
       const nextSlot = await availabilityService.getNextAvailableSlot(
-        employee_id as string,
-        business_id as string,
+        employeeId,
+        from_date ? new Date(from_date as string) : new Date(),
         duration ? parseInt(duration as string) : 60,
-        days_ahead ? parseInt(days_ahead as string) : 30
+        max_days ? parseInt(max_days as string) : 14
       );
 
       if (!nextSlot) {
-        res.json({
-          success: true,
-          data: null,
-          message: 'No available slots found',
+        res.status(404).json({
+          success: false,
+          error: 'No available slots found',
         });
         return;
       }
 
-      res.json({
+      res.status(200).json({
         success: true,
-        data: nextSlot,
+        data: nextSlot
       });
     } catch (error) {
       logger.error('Error getting next available slot:', error);
@@ -226,29 +147,19 @@ export const availabilityController = {
         error: 'Failed to get next available slot',
       });
     }
-  },
+  }
 
+  /**
+   * Custom endpoint: Get availability summary
+   */
   async getSummary(req: Request, res: Response): Promise<void> {
     try {
-      const { business_id, date, duration } = req.query;
+      const { employeeId } = req.params;
+      const summary = await availabilityService.getAvailabilitySummary(employeeId);
 
-      if (!business_id || !date) {
-        res.status(400).json({
-          success: false,
-          error: 'Missing required parameters: business_id, date',
-        });
-        return;
-      }
-
-      const summary = await availabilityService.getAvailabilitySummary(
-        business_id as string,
-        date as string,
-        duration ? parseInt(duration as string) : 60
-      );
-
-      res.json({
+      res.status(200).json({
         success: true,
-        data: summary,
+        data: summary
       });
     } catch (error) {
       logger.error('Error getting availability summary:', error);
@@ -257,5 +168,18 @@ export const availabilityController = {
         error: 'Failed to get availability summary',
       });
     }
-  },
+  }
+}
+
+// Export singleton instance configured as object for backward compatibility
+const controller = new AvailabilityController();
+export const availabilityController = {
+  create: controller.create.bind(controller),
+  getByEmployee: controller.getByEmployee.bind(controller),
+  update: controller.update.bind(controller),
+  delete: controller.delete.bind(controller),
+  getSlots: controller.getSlots.bind(controller),
+  checkAvailability: controller.checkAvailability.bind(controller),
+  getNextAvailable: controller.getNextAvailable.bind(controller),
+  getSummary: controller.getSummary.bind(controller),
 };

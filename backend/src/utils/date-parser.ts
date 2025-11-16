@@ -1,8 +1,4 @@
 /**
- * Utilidades para parsear fechas en lenguaje natural
- */
-
-/**
  * Parsea una fecha en lenguaje natural a un objeto Date
  * Soporta formatos como:
  * - "hoy"

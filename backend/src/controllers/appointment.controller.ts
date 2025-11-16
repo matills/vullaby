@@ -1,100 +1,74 @@
 import { Request, Response } from 'express';
-import { appointmentService } from '../services';
+import { appointmentService } from '../services/appointment.service';
 import {
   CreateAppointmentSchema,
   UpdateAppointmentSchema,
-  QueryAppointmentsSchema,
+  Appointment,
+  CreateAppointmentInput,
+  UpdateAppointmentInput,
 } from '../models';
 import { logger } from '../config/logger';
+import { BaseController } from '../core/base.controller';
+import { ConflictError } from '../core/errors';
 
-export const appointmentController = {
+/**
+ * AppointmentController extending BaseController
+ * Reduces ~180+ lines of boilerplate while maintaining custom endpoints
+ */
+class AppointmentController extends BaseController<Appointment, CreateAppointmentInput, UpdateAppointmentInput> {
+  protected entityName = 'Appointment';
+  protected service = appointmentService;
+  protected createSchema = CreateAppointmentSchema;
+  protected updateSchema = UpdateAppointmentSchema;
+
+  /**
+   * Override create to handle conflict errors
+   */
   async create(req: Request, res: Response): Promise<void> {
     try {
-      const validationResult = CreateAppointmentSchema.safeParse(req.body);
-
-      if (!validationResult.success) {
-        res.status(400).json({
-          success: false,
-          error: 'Validation failed',
-          details: validationResult.error.issues,
-        });
-        return;
-      }
-
-      const appointment = await appointmentService.createAppointment(
-        validationResult.data
-      );
-
-      res.status(201).json({
-        success: true,
-        data: appointment,
-      });
-    } catch (error: any) {
-      logger.error('Error creating appointment:', error);
-
-      if (error.message === 'Time slot is already booked') {
+      await super.create(req, res);
+    } catch (error) {
+      if (error instanceof ConflictError) {
         res.status(409).json({
           success: false,
-          error: 'Time slot is already booked',
+          error: error.message,
         });
         return;
       }
-
-      res.status(500).json({
-        success: false,
-        error: 'Failed to create appointment',
-      });
+      throw error;
     }
-  },
+  }
 
-  async getById(req: Request, res: Response): Promise<void> {
+  /**
+   * Override update to handle conflict errors
+   */
+  async update(req: Request, res: Response): Promise<void> {
     try {
-      const { id } = req.params;
-
-      const appointment = await appointmentService.getAppointmentById(id);
-
-      if (!appointment) {
-        res.status(404).json({
+      await super.update(req, res);
+    } catch (error) {
+      if (error instanceof ConflictError) {
+        res.status(409).json({
           success: false,
-          error: 'Appointment not found',
+          error: error.message,
         });
         return;
       }
-
-      res.json({
-        success: true,
-        data: appointment,
-      });
-    } catch (error) {
-      logger.error('Error getting appointment:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to get appointment',
-      });
+      throw error;
     }
-  },
+  }
 
+  /**
+   * Custom endpoint: Query appointments with filters
+   */
   async query(req: Request, res: Response): Promise<void> {
     try {
-      const validationResult = QueryAppointmentsSchema.safeParse(req.query);
+      const filters = req.query;
+      const appointments = await appointmentService.queryAppointments(filters as any);
 
-      if (!validationResult.success) {
-        res.status(400).json({
-          success: false,
-          error: 'Invalid query parameters',
-          details: validationResult.error.issues,
-        });
-        return;
-      }
-
-      const appointments = await appointmentService.queryAppointments(
-        validationResult.data
-      );
-
-      res.json({
+      res.status(200).json({
         success: true,
         data: appointments,
-        count: appointments.length,
+        count: appointments.length
       });
     } catch (error) {
       logger.error('Error querying appointments:', error);
@@ -103,68 +77,20 @@ export const appointmentController = {
         error: 'Failed to query appointments',
       });
     }
-  },
+  }
 
-  async update(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-
-      const validationResult = UpdateAppointmentSchema.safeParse(req.body);
-
-      if (!validationResult.success) {
-        res.status(400).json({
-          success: false,
-          error: 'Validation failed',
-          details: validationResult.error.issues,
-        });
-        return;
-      }
-
-      const appointment = await appointmentService.updateAppointment(
-        id,
-        validationResult.data
-      );
-
-      res.json({
-        success: true,
-        data: appointment,
-      });
-    } catch (error: any) {
-      logger.error('Error updating appointment:', error);
-
-      if (error.message === 'Appointment not found') {
-        res.status(404).json({
-          success: false,
-          error: 'Appointment not found',
-        });
-        return;
-      }
-
-      if (error.message === 'Time slot is already booked') {
-        res.status(409).json({
-          success: false,
-          error: 'Time slot is already booked',
-        });
-        return;
-      }
-
-      res.status(500).json({
-        success: false,
-        error: 'Failed to update appointment',
-      });
-    }
-  },
-
+  /**
+   * Custom endpoint: Cancel appointment
+   */
   async cancel(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-
       const appointment = await appointmentService.cancelAppointment(id);
 
-      res.json({
+      res.status(200).json({
         success: true,
         data: appointment,
-        message: 'Appointment cancelled successfully',
+        message: 'Appointment cancelled successfully'
       });
     } catch (error) {
       logger.error('Error cancelling appointment:', error);
@@ -173,18 +99,20 @@ export const appointmentController = {
         error: 'Failed to cancel appointment',
       });
     }
-  },
+  }
 
+  /**
+   * Custom endpoint: Confirm appointment
+   */
   async confirm(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-
       const appointment = await appointmentService.confirmAppointment(id);
 
-      res.json({
+      res.status(200).json({
         success: true,
         data: appointment,
-        message: 'Appointment confirmed successfully',
+        message: 'Appointment confirmed successfully'
       });
     } catch (error) {
       logger.error('Error confirming appointment:', error);
@@ -193,18 +121,20 @@ export const appointmentController = {
         error: 'Failed to confirm appointment',
       });
     }
-  },
+  }
 
+  /**
+   * Custom endpoint: Complete appointment
+   */
   async complete(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-
       const appointment = await appointmentService.completeAppointment(id);
 
-      res.json({
+      res.status(200).json({
         success: true,
         data: appointment,
-        message: 'Appointment completed successfully',
+        message: 'Appointment completed successfully'
       });
     } catch (error) {
       logger.error('Error completing appointment:', error);
@@ -213,60 +143,45 @@ export const appointmentController = {
         error: 'Failed to complete appointment',
       });
     }
-  },
+  }
 
+  /**
+   * Custom endpoint: Mark appointment as no-show
+   */
   async markNoShow(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-
       const appointment = await appointmentService.markNoShow(id);
 
-      res.json({
+      res.status(200).json({
         success: true,
         data: appointment,
-        message: 'Appointment marked as no-show',
+        message: 'Appointment marked as no-show'
       });
     } catch (error) {
-      logger.error('Error marking no-show:', error);
+      logger.error('Error marking appointment as no-show:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to mark as no-show',
+        error: 'Failed to mark appointment as no-show',
       });
     }
-  },
+  }
 
-  async delete(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-
-      await appointmentService.deleteAppointment(id);
-
-      res.json({
-        success: true,
-        message: 'Appointment deleted successfully',
-      });
-    } catch (error) {
-      logger.error('Error deleting appointment:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to delete appointment',
-      });
-    }
-  },
-
+  /**
+   * Custom endpoint: Get upcoming appointments
+   */
   async getUpcoming(req: Request, res: Response): Promise<void> {
     try {
       const { business_id, limit } = req.query;
-
       const appointments = await appointmentService.getUpcomingAppointments(
-        business_id as string,
-        limit ? parseInt(limit as string) : undefined
+        business_id as string | undefined,
+        limit ? parseInt(limit as string) : 10
       );
 
-      res.json({
+      res.status(200).json({
         success: true,
         data: appointments,
-        count: appointments.length,
+        count: appointments.length
       });
     } catch (error) {
       logger.error('Error getting upcoming appointments:', error);
@@ -275,8 +190,11 @@ export const appointmentController = {
         error: 'Failed to get upcoming appointments',
       });
     }
-  },
+  }
 
+  /**
+   * Custom endpoint: Get appointment statistics
+   */
   async getStats(req: Request, res: Response): Promise<void> {
     try {
       const { business_id, start_date, end_date } = req.query;
@@ -291,20 +209,36 @@ export const appointmentController = {
 
       const stats = await appointmentService.getStats(
         business_id as string,
-        start_date as string,
-        end_date as string
+        start_date as string | undefined,
+        end_date as string | undefined
       );
 
-      res.json({
+      res.status(200).json({
         success: true,
-        data: stats,
+        data: stats
       });
     } catch (error) {
-      logger.error('Error getting stats:', error);
+      logger.error('Error getting appointment stats:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to get statistics',
+        error: 'Failed to get appointment stats',
       });
     }
-  },
+  }
+}
+
+// Export singleton instance configured as object for backward compatibility
+const controller = new AppointmentController();
+export const appointmentController = {
+  create: controller.create.bind(controller),
+  getById: controller.getById.bind(controller),
+  query: controller.query.bind(controller),
+  update: controller.update.bind(controller),
+  cancel: controller.cancel.bind(controller),
+  confirm: controller.confirm.bind(controller),
+  complete: controller.complete.bind(controller),
+  markNoShow: controller.markNoShow.bind(controller),
+  delete: controller.delete.bind(controller),
+  getUpcoming: controller.getUpcoming.bind(controller),
+  getStats: controller.getStats.bind(controller),
 };

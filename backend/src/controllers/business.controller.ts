@@ -1,238 +1,74 @@
 import { Request, Response } from 'express';
-import { businessService } from '../services';
+import { businessService } from '../services/business.service';
 import {
   CreateBusinessSchema,
   UpdateBusinessSchema,
-  QueryBusinessesSchema,
+  Business,
+  CreateBusinessInput,
+  UpdateBusinessInput,
 } from '../models';
 import { logger } from '../config/logger';
+import { BaseController } from '../core/base.controller';
+import { ConflictError } from '../core/errors';
 
-export const businessController = {
+/**
+ * BusinessController extending BaseController
+ * Reduces ~180+ lines of boilerplate while maintaining custom endpoints
+ */
+class BusinessController extends BaseController<Business, CreateBusinessInput, UpdateBusinessInput> {
+  protected entityName = 'Business';
+  protected service = businessService;
+  protected createSchema = CreateBusinessSchema;
+  protected updateSchema = UpdateBusinessSchema;
+
+  /**
+   * Override create to handle phone conflict errors
+   */
   async create(req: Request, res: Response): Promise<void> {
     try {
-      const validationResult = CreateBusinessSchema.safeParse(req.body);
-
-      if (!validationResult.success) {
-        res.status(400).json({
-          success: false,
-          error: 'Validation failed',
-          details: validationResult.error.issues,
-        });
-        return;
-      }
-
-      const business = await businessService.createBusiness(
-        validationResult.data
-      );
-
-      res.status(201).json({
-        success: true,
-        data: business,
-      });
-    } catch (error: any) {
-      logger.error('Error creating business:', error);
-
-      if (error.message === 'Business with this phone number already exists') {
+      await super.create(req, res);
+    } catch (error) {
+      if (error instanceof ConflictError) {
         res.status(409).json({
           success: false,
           error: error.message,
         });
         return;
       }
-
-      res.status(500).json({
-        success: false,
-        error: 'Failed to create business',
-      });
+      throw error;
     }
-  },
+  }
 
-  async getById(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-
-      const business = await businessService.getBusinessById(id);
-
-      if (!business) {
-        res.status(404).json({
-          success: false,
-          error: 'Business not found',
-        });
-        return;
-      }
-
-      res.json({
-        success: true,
-        data: business,
-      });
-    } catch (error) {
-      logger.error('Error getting business:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to get business',
-      });
-    }
-  },
-
-  async getAll(req: Request, res: Response): Promise<void> {
-    try {
-      const validationResult = QueryBusinessesSchema.safeParse(req.query);
-
-      if (!validationResult.success) {
-        res.status(400).json({
-          success: false,
-          error: 'Invalid query parameters',
-          details: validationResult.error.issues,
-        });
-        return;
-      }
-
-      const businesses = await businessService.getAllBusinesses(
-        validationResult.data
-      );
-
-      res.json({
-        success: true,
-        data: businesses,
-        count: businesses.length,
-      });
-    } catch (error) {
-      logger.error('Error getting businesses:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to get businesses',
-      });
-    }
-  },
-
+  /**
+   * Override update to handle phone conflict errors
+   */
   async update(req: Request, res: Response): Promise<void> {
     try {
-      const { id } = req.params;
-
-      const validationResult = UpdateBusinessSchema.safeParse(req.body);
-
-      if (!validationResult.success) {
-        res.status(400).json({
-          success: false,
-          error: 'Validation failed',
-          details: validationResult.error.issues,
-        });
-        return;
-      }
-
-      const business = await businessService.updateBusiness(
-        id,
-        validationResult.data
-      );
-
-      res.json({
-        success: true,
-        data: business,
-      });
-    } catch (error: any) {
-      logger.error('Error updating business:', error);
-
-      if (error.message === 'Business not found') {
-        res.status(404).json({
-          success: false,
-          error: 'Business not found',
-        });
-        return;
-      }
-
-      if (error.message === 'Business with this phone number already exists') {
+      await super.update(req, res);
+    } catch (error) {
+      if (error instanceof ConflictError) {
         res.status(409).json({
           success: false,
           error: error.message,
         });
         return;
       }
-
-      res.status(500).json({
-        success: false,
-        error: 'Failed to update business',
-      });
+      throw error;
     }
-  },
+  }
 
-  async delete(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-
-      await businessService.deleteBusiness(id);
-
-      res.json({
-        success: true,
-        message: 'Business deleted successfully',
-      });
-    } catch (error: any) {
-      logger.error('Error deleting business:', error);
-
-      if (error.message === 'Business not found') {
-        res.status(404).json({
-          success: false,
-          error: 'Business not found',
-        });
-        return;
-      }
-
-      res.status(500).json({
-        success: false,
-        error: 'Failed to delete business',
-      });
-    }
-  },
-
-  async search(req: Request, res: Response): Promise<void> {
-    try {
-      const { q, limit } = req.query;
-
-      if (!q || typeof q !== 'string') {
-        res.status(400).json({
-          success: false,
-          error: 'Search query (q) is required',
-        });
-        return;
-      }
-
-      const businesses = await businessService.searchBusinesses(
-        q,
-        limit ? parseInt(limit as string) : undefined
-      );
-
-      res.json({
-        success: true,
-        data: businesses,
-        count: businesses.length,
-      });
-    } catch (error) {
-      logger.error('Error searching businesses:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to search businesses',
-      });
-    }
-  },
-
+  /**
+   * Custom endpoint: Get business employees
+   */
   async getEmployees(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-
-      const business = await businessService.getBusinessById(id);
-      if (!business) {
-        res.status(404).json({
-          success: false,
-          error: 'Business not found',
-        });
-        return;
-      }
-
       const employees = await businessService.getBusinessEmployees(id);
 
-      res.json({
+      res.status(200).json({
         success: true,
         data: employees,
-        count: employees.length,
+        count: employees.length
       });
     } catch (error) {
       logger.error('Error getting business employees:', error);
@@ -241,32 +77,26 @@ export const businessController = {
         error: 'Failed to get business employees',
       });
     }
-  },
+  }
 
+  /**
+   * Custom endpoint: Get business appointments
+   */
   async getAppointments(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const { start_date, end_date } = req.query;
 
-      const business = await businessService.getBusinessById(id);
-      if (!business) {
-        res.status(404).json({
-          success: false,
-          error: 'Business not found',
-        });
-        return;
-      }
-
       const appointments = await businessService.getBusinessAppointments(
         id,
-        start_date as string,
-        end_date as string
+        start_date as string | undefined,
+        end_date as string | undefined
       );
 
-      res.json({
+      res.status(200).json({
         success: true,
         data: appointments,
-        count: appointments.length,
+        count: appointments.length
       });
     } catch (error) {
       logger.error('Error getting business appointments:', error);
@@ -275,33 +105,40 @@ export const businessController = {
         error: 'Failed to get business appointments',
       });
     }
-  },
+  }
 
+  /**
+   * Custom endpoint: Get business statistics
+   */
   async getStats(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-
-      const business = await businessService.getBusinessById(id);
-      if (!business) {
-        res.status(404).json({
-          success: false,
-          error: 'Business not found',
-        });
-        return;
-      }
-
       const stats = await businessService.getBusinessStats(id);
 
-      res.json({
+      res.status(200).json({
         success: true,
-        data: stats,
+        data: stats
       });
     } catch (error) {
       logger.error('Error getting business stats:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to get business statistics',
+        error: 'Failed to get business stats',
       });
     }
-  },
+  }
+}
+
+// Export singleton instance configured as object for backward compatibility
+const controller = new BusinessController();
+export const businessController = {
+  create: controller.create.bind(controller),
+  getById: controller.getById.bind(controller),
+  getAll: controller.getAll.bind(controller),
+  update: controller.update.bind(controller),
+  delete: controller.delete.bind(controller),
+  search: controller.search.bind(controller),
+  getEmployees: controller.getEmployees.bind(controller),
+  getAppointments: controller.getAppointments.bind(controller),
+  getStats: controller.getStats.bind(controller),
 };

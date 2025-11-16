@@ -6,65 +6,81 @@ import {
   UpdateEmployeeInput,
   QueryEmployeesInput,
 } from '../models';
+import { BaseService } from '../core/base.service';
+import { NotFoundError } from '../core/errors';
 
-export const employeeService = {
-  async createEmployee(data: CreateEmployeeInput): Promise<Employee> {
+/**
+ * EmployeeService extending BaseService
+ * Reduces ~150 lines of boilerplate while maintaining custom functionality
+ */
+class EmployeeService extends BaseService<Employee> {
+  protected tableName = 'employees';
+  protected entityName = 'Employee';
+
+  constructor() {
+    super(supabase);
+  }
+
+  /**
+   * Override create to validate business exists
+   */
+  async create(data: CreateEmployeeInput): Promise<Employee> {
     try {
-      const { data: business, error: businessError } = await supabase
+      // Validate business exists
+      const { data: business, error: businessError } = await this.supabase
         .from('businesses')
         .select('id')
         .eq('id', data.business_id)
         .single();
 
       if (businessError || !business) {
-        throw new Error('Business not found');
+        throw new NotFoundError('Business');
       }
 
-      const { data: employee, error } = await supabase
-        .from('employees')
-        .insert(data)
-        .select()
-        .single();
-
-      if (error) {
-        logger.error('Error creating employee:', error);
-        throw error;
-      }
-
-      logger.info(`Employee created: ${employee.name} (ID: ${employee.id}, Business: ${employee.business_id})`);
-      return employee;
+      // Call parent create
+      return await super.create(data);
     } catch (error) {
       logger.error('Error in createEmployee:', error);
       throw error;
     }
-  },
+  }
 
-  async getEmployeeById(id: string): Promise<Employee | null> {
+  /**
+   * Override getById to include business info
+   */
+  async getById(id: string): Promise<Employee | null> {
     try {
-      const { data, error } = await supabase
-        .from('employees')
+      const { data, error } = await this.supabase
+        .from(this.tableName)
         .select('*, businesses(name)')
         .eq('id', id)
         .single();
 
       if (error) {
         if (error.code === 'PGRST116') {
-          return null;
+          throw new NotFoundError(this.entityName);
         }
+        logger.error(`Error getting ${this.entityName} by ID:`, error);
         throw error;
       }
 
-      return data;
+      return data as Employee;
     } catch (error) {
-      logger.error('Error in getEmployeeById:', error);
+      if (error instanceof NotFoundError) {
+        throw error;
+      }
+      logger.error(`Error in get${this.entityName}ById:`, error);
       throw error;
     }
-  },
+  }
 
-  async getAllEmployees(filters?: QueryEmployeesInput): Promise<Employee[]> {
+  /**
+   * Override getAll to include business info and support filtering
+   */
+  async getAll(filters?: QueryEmployeesInput): Promise<Employee[]> {
     try {
-      let query = supabase
-        .from('employees')
+      let query = this.supabase
+        .from(this.tableName)
         .select('*, businesses(name)');
 
       if (filters?.business_id) {
@@ -101,135 +117,24 @@ export const employeeService = {
       const { data, error } = await query;
 
       if (error) {
-        logger.error('Error getting all employees:', error);
+        logger.error(`Error getting all ${this.entityName}s:`, error);
         throw error;
       }
 
       return data || [];
     } catch (error) {
-      logger.error('Error in getAllEmployees:', error);
+      logger.error(`Error in getAll${this.entityName}s:`, error);
       throw error;
     }
-  },
+  }
 
-  async getEmployeesByBusiness(businessId: string): Promise<Employee[]> {
+  /**
+   * Override search to include business info
+   */
+  async search(query: string, limit: number = 10): Promise<Employee[]> {
     try {
-      const { data, error } = await supabase
-        .from('employees')
-        .select('*')
-        .eq('business_id', businessId)
-        .order('name', { ascending: true });
-
-      if (error) {
-        logger.error('Error getting employees by business:', error);
-        throw error;
-      }
-
-      return data || [];
-    } catch (error) {
-      logger.error('Error in getEmployeesByBusiness:', error);
-      throw error;
-    }
-  },
-
-  async getActiveEmployeesByBusiness(businessId: string): Promise<Employee[]> {
-    try {
-      const { data, error } = await supabase
-        .from('employees')
-        .select('*')
-        .eq('business_id', businessId)
-        .eq('is_active', true)
-        .order('name', { ascending: true });
-
-      if (error) {
-        logger.error('Error getting active employees:', error);
-        throw error;
-      }
-
-      return data || [];
-    } catch (error) {
-      logger.error('Error in getActiveEmployeesByBusiness:', error);
-      throw error;
-    }
-  },
-
-  async updateEmployee(
-    id: string,
-    data: UpdateEmployeeInput
-  ): Promise<Employee> {
-    try {
-      const existing = await this.getEmployeeById(id);
-      if (!existing) {
-        throw new Error('Employee not found');
-      }
-
-      const { data: employee, error } = await supabase
-        .from('employees')
-        .update(data)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) {
-        logger.error('Error updating employee:', error);
-        throw error;
-      }
-
-      logger.info(`Employee updated: ${employee.name} (ID: ${id})`);
-      return employee;
-    } catch (error) {
-      logger.error('Error in updateEmployee:', error);
-      throw error;
-    }
-  },
-
-  async deleteEmployee(id: string): Promise<boolean> {
-    try {
-      const existing = await this.getEmployeeById(id);
-      if (!existing) {
-        throw new Error('Employee not found');
-      }
-
-      const { error } = await supabase
-        .from('employees')
-        .delete()
-        .eq('id', id);
-
-      if (error) {
-        logger.error('Error deleting employee:', error);
-        throw error;
-      }
-
-      logger.info(`Employee deleted: ${existing.name} (ID: ${id})`);
-      return true;
-    } catch (error) {
-      logger.error('Error in deleteEmployee:', error);
-      throw error;
-    }
-  },
-
-  async activateEmployee(id: string): Promise<Employee> {
-    try {
-      return await this.updateEmployee(id, { is_active: true });
-    } catch (error) {
-      logger.error('Error in activateEmployee:', error);
-      throw error;
-    }
-  },
-
-  async deactivateEmployee(id: string): Promise<Employee> {
-    try {
-      return await this.updateEmployee(id, { is_active: false });
-    } catch (error) {
-      logger.error('Error in deactivateEmployee:', error);
-      throw error;
-    }
-  },
-
-  async searchEmployees(query: string, limit: number = 10): Promise<Employee[]> {
-    try {
-      const { data, error } = await supabase
-        .from('employees')
+      const { data, error } = await this.supabase
+        .from(this.tableName)
         .select('*, businesses(name)')
         .or(
           `name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%,role.ilike.%${query}%`
@@ -238,20 +143,51 @@ export const employeeService = {
         .order('name', { ascending: true });
 
       if (error) {
-        logger.error('Error searching employees:', error);
+        logger.error(`Error searching ${this.entityName}s:`, error);
         throw error;
       }
 
       return data || [];
     } catch (error) {
-      logger.error('Error in searchEmployees:', error);
+      logger.error(`Error in search${this.entityName}s:`, error);
       throw error;
     }
-  },
+  }
 
+  /**
+   * Custom method: Get employees by business
+   */
+  async getEmployeesByBusiness(businessId: string): Promise<Employee[]> {
+    return this.getAll({ business_id: businessId });
+  }
+
+  /**
+   * Custom method: Get active employees by business
+   */
+  async getActiveEmployeesByBusiness(businessId: string): Promise<Employee[]> {
+    return this.getAll({ business_id: businessId, is_active: true });
+  }
+
+  /**
+   * Custom method: Activate employee
+   */
+  async activateEmployee(id: string): Promise<Employee> {
+    return this.update(id, { is_active: true });
+  }
+
+  /**
+   * Custom method: Deactivate employee
+   */
+  async deactivateEmployee(id: string): Promise<Employee> {
+    return this.update(id, { is_active: false });
+  }
+
+  /**
+   * Custom method: Get employee availability
+   */
   async getEmployeeAvailability(employeeId: string) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase
         .from('availability')
         .select('*')
         .eq('employee_id', employeeId)
@@ -268,15 +204,18 @@ export const employeeService = {
       logger.error('Error in getEmployeeAvailability:', error);
       throw error;
     }
-  },
+  }
 
+  /**
+   * Custom method: Get employee appointments
+   */
   async getEmployeeAppointments(
     employeeId: string,
     startDate?: string,
     endDate?: string
   ) {
     try {
-      let query = supabase
+      let query = this.supabase
         .from('appointments')
         .select('*, customers(name, phone)')
         .eq('employee_id', employeeId);
@@ -291,7 +230,7 @@ export const employeeService = {
 
       query = query.order('start_time', { ascending: true });
 
-      const { data, error } = await query;
+      const { data, error} = await query;
 
       if (error) {
         logger.error('Error getting employee appointments:', error);
@@ -303,8 +242,11 @@ export const employeeService = {
       logger.error('Error in getEmployeeAppointments:', error);
       throw error;
     }
-  },
+  }
 
+  /**
+   * Custom method: Get employee statistics
+   */
   async getEmployeeStats(employeeId: string) {
     try {
       const appointments = await this.getEmployeeAppointments(employeeId);
@@ -335,5 +277,17 @@ export const employeeService = {
       logger.error('Error in getEmployeeStats:', error);
       throw error;
     }
-  },
-};
+  }
+
+  // Alias methods for backward compatibility
+  createEmployee = this.create;
+  getEmployeeById = this.getById;
+  getAllEmployees = this.getAll;
+  updateEmployee = this.update;
+  deleteEmployee = this.delete;
+  searchEmployees = this.search;
+}
+
+// Export class and singleton instance
+export { EmployeeService };
+export const employeeService = new EmployeeService();

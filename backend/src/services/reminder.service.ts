@@ -1,7 +1,7 @@
 import { reminderQueue } from '../config/queue';
 import { logger } from '../config/logger';
-import { whatsappService } from './whatsapp.service';
 import { appointmentService } from './appointment.service';
+import { MessageFormatter } from './whatsapp/MessageFormatter';
 
 export interface ReminderJobData {
   appointmentId: string;
@@ -139,17 +139,20 @@ export const reminderService = {
         message =
           '🔔 Recordatorio: Mañana tienes una cita\n\n' +
           `👤 Profesional: ${data.employeeName}\n` +
-          `📅 Fecha: ${whatsappService.formatDate(startTime)}\n` +
-          `⏰ Hora: ${whatsappService.formatTime(startTime)} - ${whatsappService.formatTime(endTime)}\n\n` +
+          `📅 Fecha: ${MessageFormatter.formatDatePublic(startTime)}\n` +
+          `⏰ Hora: ${MessageFormatter.formatTimePublic(startTime)} - ${MessageFormatter.formatTimePublic(endTime)}\n\n` +
           'Te esperamos!';
       } else {
         message =
           '⏰ Tu cita es en 2 horas!\n\n' +
           `👤 Profesional: ${data.employeeName}\n` +
-          `📅 Fecha: ${whatsappService.formatDate(startTime)}\n` +
-          `⏰ Hora: ${whatsappService.formatTime(startTime)} - ${whatsappService.formatTime(endTime)}\n\n` +
+          `📅 Fecha: ${MessageFormatter.formatDatePublic(startTime)}\n` +
+          `⏰ Hora: ${MessageFormatter.formatTimePublic(startTime)} - ${MessageFormatter.formatTimePublic(endTime)}\n\n` +
           'Nos vemos pronto!';
       }
+
+      // Lazy load whatsappService to avoid circular dependency
+      const { whatsappService } = await import('./whatsapp.service');
 
       // Enviar mensaje por WhatsApp
       await whatsappService.sendMessage(data.customerPhone, message);

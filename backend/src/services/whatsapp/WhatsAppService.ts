@@ -1,18 +1,18 @@
-import { sendWhatsAppMessage } from '../config/twilio';
-import { logger } from '../config/logger';
-import { sessionService } from './session.service';
-import { customerService } from './customer.service';
-import { employeeService } from './employee.service';
-import { appointmentService } from './appointment.service';
-import { availabilityService } from './availability.service';
-import { IncomingWhatsAppMessage } from '../models';
-import { IntentDetector } from './whatsapp/IntentDetector';
-import { DataExtractor } from './whatsapp/DataExtractor';
-import { ValidationService } from './whatsapp/ValidationService';
-import { MessageFormatter } from './whatsapp/MessageFormatter';
-import { BookingHandler } from './whatsapp/BookingHandler';
-import { CancellationHandler } from './whatsapp/CancellationHandler';
-import { ViewHandler } from './whatsapp/ViewHandler';
+import { sendWhatsAppMessage } from '../../config/twilio';
+import { logger } from '../../config/logger';
+import { sessionService } from '../session.service';
+import { customerService } from '../customer.service';
+import { employeeService } from '../employee.service';
+import { appointmentService } from '../appointment.service';
+import { availabilityService } from '../availability.service';
+import { IncomingWhatsAppMessage } from '../../models';
+import { IntentDetector } from './IntentDetector';
+import { DataExtractor } from './DataExtractor';
+import { ValidationService } from './ValidationService';
+import { MessageFormatter } from './MessageFormatter';
+import { BookingHandler } from './BookingHandler';
+import { CancellationHandler } from './CancellationHandler';
+import { ViewHandler } from './ViewHandler';
 
 // TODO: Remove this once multi-tenancy is implemented
 const DEFAULT_BUSINESS_ID = process.env.DEFAULT_BUSINESS_ID || '966d6a45-9111-4a42-b618-2f744ebce14a';
