@@ -89,14 +89,23 @@ class SessionStore {
   }
 }
 
-export const sessionStore = new SessionStore();
+const sessionStore = new SessionStore();
 
-export const sessionService = {
+/**
+ * SessionService - Manages WhatsApp conversation sessions
+ */
+export class SessionService {
+  private store: SessionStore;
+
+  constructor() {
+    this.store = sessionStore;
+  }
+
   getOrCreateSession(phone: string): WhatsAppSession {
-    let session = sessionStore.get(phone);
+    let session = this.store.get(phone);
 
     if (!session) {
-      session = sessionStore.set(phone, {
+      session = this.store.set(phone, {
         phone,
         state: 'initial',
         data: {},
@@ -105,37 +114,37 @@ export const sessionService = {
     }
 
     return session;
-  },
+  }
 
   updateState(phone: string, state: ConversationState): WhatsAppSession | null {
-    return sessionStore.updateState(phone, state);
-  },
+    return this.store.updateState(phone, state);
+  }
 
   updateData(phone: string, data: Partial<SessionData>): WhatsAppSession | null {
-    return sessionStore.updateData(phone, data);
-  },
+    return this.store.updateData(phone, data);
+  }
 
   endSession(phone: string): boolean {
-    return sessionStore.delete(phone);
-  },
+    return this.store.delete(phone);
+  }
 
   resetSession(phone: string): WhatsAppSession {
-    return sessionStore.set(phone, {
+    return this.store.set(phone, {
       phone,
       state: 'initial',
       data: {},
     });
-  },
+  }
 
   getStats() {
-    const sessions = sessionStore.getAllSessions();
+    const sessions = this.store.getAllSessions();
     const stateCount = sessions.reduce((acc, session) => {
       acc[session.state] = (acc[session.state] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
 
     return {
-      totalSessions: sessionStore.getSessionCount(),
+      totalSessions: this.store.getSessionCount(),
       stateDistribution: stateCount,
       sessions: sessions.map(s => ({
         phone: s.phone,
@@ -143,5 +152,9 @@ export const sessionService = {
         lastActivity: s.lastActivity,
       })),
     };
-  },
-};
+  }
+}
+
+// Export class and singleton instance
+export { SessionService as SessionServiceClass };
+export const sessionService = new SessionService();

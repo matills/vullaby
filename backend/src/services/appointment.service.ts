@@ -6,10 +6,26 @@ import {
   UpdateAppointmentInput,
   QueryAppointmentsInput,
 } from '../models';
+import { BaseService } from '../core/base.service';
+import { ConflictError, NotFoundError } from '../core/errors';
 import { reminderService } from './reminder.service';
 
-export const appointmentService = {
-  async createAppointment(data: CreateAppointmentInput): Promise<Appointment> {
+/**
+ * AppointmentService extending BaseService
+ * Reduces ~100 lines of boilerplate while maintaining complex business logic
+ */
+class AppointmentService extends BaseService<Appointment> {
+  protected tableName = 'appointments';
+  protected entityName = 'Appointment';
+
+  constructor() {
+    super(supabase);
+  }
+
+  /**
+   * Override create to check for conflicts
+   */
+  async create(data: CreateAppointmentInput): Promise<Appointment> {
     try {
       const hasConflict = await this.checkConflict(
         data.employee_id,
@@ -18,61 +34,137 @@ export const appointmentService = {
       );
 
       if (hasConflict) {
-        throw new Error('Time slot is already booked');
+        throw new ConflictError('Time slot is already booked');
       }
 
-      const { data: appointment, error } = await supabase
-        .from('appointments')
-        .insert({
-          business_id: data.business_id,
-          employee_id: data.employee_id,
-          customer_id: data.customer_id,
-          start_time: data.start_time,
-          end_time: data.end_time,
-          status: 'pending',
-          notes: data.notes,
-        })
-        .select()
-        .single();
+      // Set default status to pending
+      const appointmentData = {
+        ...data,
+        status: data.status || 'pending',
+      };
 
-      if (error) {
-        logger.error('Error creating appointment:', error);
-        throw error;
-      }
-
-      logger.info('Appointment created:', appointment.id);
-      return appointment;
+      return await super.create(appointmentData);
     } catch (error) {
       logger.error('Error in createAppointment:', error);
       throw error;
     }
-  },
+  }
 
-  async getAppointmentById(id: string): Promise<Appointment | null> {
+  /**
+   * Override update to check for conflicts when time/employee changes
+   */
+  async update(id: string, data: UpdateAppointmentInput): Promise<Appointment> {
     try {
-      const { data, error } = await supabase
-        .from('appointments')
-        .select('*')
-        .eq('id', id)
-        .single();
+      if (data.start_time || data.end_time || data.employee_id) {
+        const existing = await this.getById(id);
+        if (!existing) {
+          throw new NotFoundError(this.entityName);
+        }
+
+        const hasConflict = await this.checkConflict(
+          data.employee_id || existing.employee_id,
+          data.start_time || existing.start_time,
+          data.end_time || existing.end_time,
+          id
+        );
+
+        if (hasConflict) {
+          throw new ConflictError('Time slot is already booked');
+        }
+      }
+
+      return await super.update(id, data);
+    } catch (error) {
+      logger.error('Error in updateAppointment:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Custom method: Cancel appointment and its reminders
+   */
+  async cancelAppointment(id: string): Promise<Appointment> {
+    try {
+      const result = await this.update(id, { status: 'cancelled' });
+
+      // Cancel scheduled reminders
+      try {
+        await reminderService.cancelReminders(id);
+        logger.info(`Reminders cancelled for appointment ${id}`);
+      } catch (reminderError) {
+        logger.error('Error cancelling reminders:', reminderError);
+        // Don't fail appointment cancellation if reminders fail
+      }
+
+      return result;
+    } catch (error) {
+      logger.error('Error in cancelAppointment:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Custom method: Confirm appointment
+   */
+  async confirmAppointment(id: string): Promise<Appointment> {
+    return this.update(id, { status: 'confirmed' });
+  }
+
+  /**
+   * Custom method: Complete appointment
+   */
+  async completeAppointment(id: string): Promise<Appointment> {
+    return this.update(id, { status: 'completed' });
+  }
+
+  /**
+   * Custom method: Mark appointment as no-show
+   */
+  async markNoShow(id: string): Promise<Appointment> {
+    return this.update(id, { status: 'no_show' });
+  }
+
+  /**
+   * Custom method: Check for appointment conflicts
+   */
+  async checkConflict(
+    employeeId: string,
+    startTime: string,
+    endTime: string,
+    excludeAppointmentId?: string
+  ): Promise<boolean> {
+    try {
+      let query = this.supabase
+        .from(this.tableName)
+        .select('id')
+        .eq('employee_id', employeeId)
+        .neq('status', 'cancelled')
+        .or(`and(start_time.lt.${endTime},end_time.gt.${startTime})`);
+
+      if (excludeAppointmentId) {
+        query = query.neq('id', excludeAppointmentId);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
-        if (error.code === 'PGRST116') {
-          return null;
-        }
+        logger.error('Error checking conflicts:', error);
         throw error;
       }
 
-      return data;
+      return (data?.length || 0) > 0;
     } catch (error) {
-      logger.error('Error in getAppointmentById:', error);
+      logger.error('Error in checkConflict:', error);
       throw error;
     }
-  },
+  }
 
+  /**
+   * Custom method: Query appointments with filters
+   */
   async queryAppointments(filters: QueryAppointmentsInput): Promise<Appointment[]> {
     try {
-      let query = supabase.from('appointments').select('*');
+      let query = this.supabase.from(this.tableName).select('*');
 
       if (filters.business_id) {
         query = query.eq('business_id', filters.business_id);
@@ -110,150 +202,11 @@ export const appointmentService = {
       logger.error('Error in queryAppointments:', error);
       throw error;
     }
-  },
+  }
 
-  async updateAppointment(
-    id: string,
-    data: UpdateAppointmentInput
-  ): Promise<Appointment> {
-    try {
-      if (data.start_time || data.end_time) {
-        const existing = await this.getAppointmentById(id);
-        if (!existing) {
-          throw new Error('Appointment not found');
-        }
-
-        const hasConflict = await this.checkConflict(
-          data.employee_id || existing.employee_id,
-          data.start_time || existing.start_time,
-          data.end_time || existing.end_time,
-          id
-        );
-
-        if (hasConflict) {
-          throw new Error('Time slot is already booked');
-        }
-      }
-
-      const { data: appointment, error } = await supabase
-        .from('appointments')
-        .update(data)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) {
-        logger.error('Error updating appointment:', error);
-        throw error;
-      }
-
-      logger.info('Appointment updated:', id);
-      return appointment;
-    } catch (error) {
-      logger.error('Error in updateAppointment:', error);
-      throw error;
-    }
-  },
-
-  async cancelAppointment(id: string): Promise<Appointment> {
-    try {
-      const result = await this.updateAppointment(id, { status: 'cancelled' });
-
-      // Cancelar recordatorios programados
-      try {
-        await reminderService.cancelReminders(id);
-        logger.info(`Reminders cancelled for appointment ${id}`);
-      } catch (reminderError) {
-        logger.error('Error cancelling reminders:', reminderError);
-        // No fallar la cancelación de la cita si los recordatorios fallan
-      }
-
-      return result;
-    } catch (error) {
-      logger.error('Error in cancelAppointment:', error);
-      throw error;
-    }
-  },
-
-  async confirmAppointment(id: string): Promise<Appointment> {
-    try {
-      return await this.updateAppointment(id, { status: 'confirmed' });
-    } catch (error) {
-      logger.error('Error in confirmAppointment:', error);
-      throw error;
-    }
-  },
-
-  async completeAppointment(id: string): Promise<Appointment> {
-    try {
-      return await this.updateAppointment(id, { status: 'completed' });
-    } catch (error) {
-      logger.error('Error in completeAppointment:', error);
-      throw error;
-    }
-  },
-
-  async markNoShow(id: string): Promise<Appointment> {
-    try {
-      return await this.updateAppointment(id, { status: 'no_show' });
-    } catch (error) {
-      logger.error('Error in markNoShow:', error);
-      throw error;
-    }
-  },
-
-  async deleteAppointment(id: string): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('appointments')
-        .delete()
-        .eq('id', id);
-
-      if (error) {
-        logger.error('Error deleting appointment:', error);
-        throw error;
-      }
-
-      logger.info('Appointment deleted:', id);
-      return true;
-    } catch (error) {
-      logger.error('Error in deleteAppointment:', error);
-      throw error;
-    }
-  },
-
-  async checkConflict(
-    employeeId: string,
-    startTime: string,
-    endTime: string,
-    excludeAppointmentId?: string
-  ): Promise<boolean> {
-    try {
-      let query = supabase
-        .from('appointments')
-        .select('id')
-        .eq('employee_id', employeeId)
-        .neq('status', 'cancelled')
-        .or(`and(start_time.lt.${endTime},end_time.gt.${startTime})`);
-
-      if (excludeAppointmentId) {
-        query = query.neq('id', excludeAppointmentId);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        logger.error('Error checking conflicts:', error);
-        throw error;
-      }
-
-      return (data?.length || 0) > 0;
-    } catch (error) {
-      logger.error('Error in checkConflict:', error);
-      throw error;
-    }
-  },
-
+  /**
+   * Custom method: Get appointments by date range
+   */
   async getAppointmentsByDateRange(
     employeeId: string,
     startDate: string,
@@ -264,16 +217,28 @@ export const appointmentService = {
       start_date: startDate,
       end_date: endDate,
     });
-  },
+  }
 
+  /**
+   * Custom method: Get appointments by customer
+   */
+  async getAppointmentsByCustomer(customerId: string): Promise<Appointment[]> {
+    return this.queryAppointments({
+      customer_id: customerId,
+    });
+  }
+
+  /**
+   * Custom method: Get upcoming appointments
+   */
   async getUpcomingAppointments(
     businessId?: string,
     limit: number = 10
   ): Promise<Appointment[]> {
     try {
       const now = new Date().toISOString();
-      let query = supabase
-        .from('appointments')
+      let query = this.supabase
+        .from(this.tableName)
         .select(`
           *,
           customer:customers(id, name, phone, email),
@@ -300,8 +265,11 @@ export const appointmentService = {
       logger.error('Error in getUpcomingAppointments:', error);
       throw error;
     }
-  },
+  }
 
+  /**
+   * Custom method: Get appointment statistics
+   */
   async getStats(businessId: string, startDate?: string, endDate?: string) {
     try {
       const now = new Date();
@@ -317,8 +285,8 @@ export const appointmentService = {
       weekEnd.setHours(23, 59, 59, 999);
 
       // Get today's appointments
-      const { data: todayData, error: todayError } = await supabase
-        .from('appointments')
+      const { data: todayData, error: todayError } = await this.supabase
+        .from(this.tableName)
         .select('id')
         .eq('business_id', businessId)
         .gte('start_time', todayStart)
@@ -327,8 +295,8 @@ export const appointmentService = {
       if (todayError) throw todayError;
 
       // Get this week's appointments
-      const { data: weekData, error: weekError } = await supabase
-        .from('appointments')
+      const { data: weekData, error: weekError } = await this.supabase
+        .from(this.tableName)
         .select('id')
         .eq('business_id', businessId)
         .gte('start_time', weekStart.toISOString())
@@ -337,8 +305,8 @@ export const appointmentService = {
       if (weekError) throw weekError;
 
       // Get pending appointments
-      const { data: pendingData, error: pendingError } = await supabase
-        .from('appointments')
+      const { data: pendingData, error: pendingError } = await this.supabase
+        .from(this.tableName)
         .select('id')
         .eq('business_id', businessId)
         .eq('status', 'pending');
@@ -354,5 +322,15 @@ export const appointmentService = {
       logger.error('Error in getStats:', error);
       throw error;
     }
-  },
-};
+  }
+
+  // Alias methods for backward compatibility
+  createAppointment = this.create;
+  getAppointmentById = this.getById;
+  updateAppointment = this.update;
+  deleteAppointment = this.delete;
+}
+
+// Export class and singleton instance
+export { AppointmentService };
+export const appointmentService = new AppointmentService();

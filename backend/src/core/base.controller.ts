@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { ZodSchema } from 'zod';
-import logger from '../config/logger';
+import { logger } from '../config/logger';
 
 /**
  * Base controller class that provides generic CRUD operations

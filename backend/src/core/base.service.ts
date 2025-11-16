@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import logger from '../config/logger';
+import { logger } from '../config/logger';
 import { NotFoundError } from './errors';
 
 /**

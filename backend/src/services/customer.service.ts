@@ -1,9 +1,24 @@
 import { supabase } from '../config/supabase';
 import { logger } from '../config/logger';
 import { Customer, CreateCustomerInput, UpdateCustomerInput } from '../models';
+import { BaseService } from '../core/base.service';
 
-export const customerService = {
-  async createCustomer(data: CreateCustomerInput): Promise<Customer> {
+/**
+ * Customer service extending BaseService
+ * Reduces ~100 lines of boilerplate code while maintaining custom functionality
+ */
+class CustomerService extends BaseService<Customer> {
+  protected tableName = 'customers';
+  protected entityName = 'Customer';
+
+  constructor() {
+    super(supabase);
+  }
+
+  /**
+   * Override create to check for existing customer by phone
+   */
+  async create(data: CreateCustomerInput): Promise<Customer> {
     try {
       const existing = await this.getCustomerByPhone(data.phone);
 
@@ -12,51 +27,44 @@ export const customerService = {
         return existing;
       }
 
-      const { data: customer, error } = await supabase
-        .from('customers')
-        .insert(data)
-        .select()
-        .single();
-
-      if (error) {
-        logger.error('Error creating customer:', error);
-        throw error;
-      }
-
-      logger.info('Customer created:', customer.id);
-      return customer;
+      // Call parent create method
+      return await super.create(data);
     } catch (error) {
       logger.error('Error in createCustomer:', error);
       throw error;
     }
-  },
+  }
 
-  async getCustomerById(id: string): Promise<Customer | null> {
+  /**
+   * Override search for specific customer search fields
+   */
+  async search(query: string, limit: number = 10): Promise<Customer[]> {
     try {
-      const { data, error } = await supabase
-        .from('customers')
+      const { data, error } = await this.supabase
+        .from(this.tableName)
         .select('*')
-        .eq('id', id)
-        .single();
+        .or(`name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%`)
+        .limit(limit);
 
       if (error) {
-        if (error.code === 'PGRST116') {
-          return null;
-        }
+        logger.error('Error searching customers:', error);
         throw error;
       }
 
-      return data;
+      return data || [];
     } catch (error) {
-      logger.error('Error in getCustomerById:', error);
+      logger.error('Error in searchCustomers:', error);
       throw error;
     }
-  },
+  }
 
+  /**
+   * Custom method: Get customer by phone number
+   */
   async getCustomerByPhone(phone: string): Promise<Customer | null> {
     try {
-      const { data, error } = await supabase
-        .from('customers')
+      const { data, error } = await this.supabase
+        .from(this.tableName)
         .select('*')
         .eq('phone', phone)
         .single();
@@ -73,8 +81,11 @@ export const customerService = {
       logger.error('Error in getCustomerByPhone:', error);
       throw error;
     }
-  },
+  }
 
+  /**
+   * Custom method: Get or create customer by phone
+   */
   async getOrCreateCustomer(phone: string, name?: string): Promise<Customer> {
     try {
       const existing = await this.getCustomerByPhone(phone);
@@ -83,58 +94,19 @@ export const customerService = {
         return existing;
       }
 
-      return await this.createCustomer({ phone, name });
+      return await this.create({ phone, name });
     } catch (error) {
       logger.error('Error in getOrCreateCustomer:', error);
       throw error;
     }
-  },
+  }
 
-  async updateCustomer(id: string, data: UpdateCustomerInput): Promise<Customer> {
-    try {
-      const { data: customer, error } = await supabase
-        .from('customers')
-        .update(data)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) {
-        logger.error('Error updating customer:', error);
-        throw error;
-      }
-
-      logger.info('Customer updated:', id);
-      return customer;
-    } catch (error) {
-      logger.error('Error in updateCustomer:', error);
-      throw error;
-    }
-  },
-
-  async deleteCustomer(id: string): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('customers')
-        .delete()
-        .eq('id', id);
-
-      if (error) {
-        logger.error('Error deleting customer:', error);
-        throw error;
-      }
-
-      logger.info('Customer deleted:', id);
-      return true;
-    } catch (error) {
-      logger.error('Error in deleteCustomer:', error);
-      throw error;
-    }
-  },
-
+  /**
+   * Custom method: Get all customers for a specific business
+   */
   async getCustomersByBusiness(businessId: string, limit?: number): Promise<any[]> {
     try {
-      let query = supabase
+      let query = this.supabase
         .from('appointments')
         .select(`
           customer_id,
@@ -179,31 +151,14 @@ export const customerService = {
       logger.error('Error in getCustomersByBusiness:', error);
       throw error;
     }
-  },
+  }
 
-  async searchCustomers(query: string, limit: number = 10): Promise<Customer[]> {
-    try {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .or(`name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%`)
-        .limit(limit);
-
-      if (error) {
-        logger.error('Error searching customers:', error);
-        throw error;
-      }
-
-      return data || [];
-    } catch (error) {
-      logger.error('Error in searchCustomers:', error);
-      throw error;
-    }
-  },
-
+  /**
+   * Custom method: Get customer appointment history
+   */
   async getCustomerHistory(customerId: string) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase
         .from('appointments')
         .select('*, employees(name), businesses(name)')
         .eq('customer_id', customerId)
@@ -219,5 +174,16 @@ export const customerService = {
       logger.error('Error in getCustomerHistory:', error);
       throw error;
     }
-  },
-};
+  }
+
+  // Alias methods for backward compatibility
+  createCustomer = this.create;
+  getCustomerById = this.getById;
+  updateCustomer = this.update;
+  deleteCustomer = this.delete;
+  searchCustomers = this.search;
+}
+
+// Export class and singleton instance
+export { CustomerService };
+export const customerService = new CustomerService();

@@ -315,4 +315,21 @@ export class MessageFormatter {
       `¿Qué necesitas?`
     );
   }
+
+  /**
+   * Public method: Format date for messages
+   */
+  static formatDatePublic(date: Date): string {
+    return format(date, "EEEE d 'de' MMMM", { locale: es });
+  }
+
+  /**
+   * Public method: Format time for messages
+   */
+  static formatTimePublic(date: Date): string {
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const time = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    return this.formatTime(time);
+  }
 }
