@@ -16,6 +16,7 @@ jest.mock('../../config/twilio');
 describe('WhatsApp Flow Integration Tests', () => {
   let whatsappService: WhatsAppService;
   const testPhone = 'whatsapp:+1234567890';
+  const testTo = 'whatsapp:+1234567891'; // Business number
   const testBusinessId = 'test-business-id';
 
   beforeEach(() => {
@@ -27,6 +28,7 @@ describe('WhatsApp Flow Integration Tests', () => {
     it('should ask for name when customer does not exist', async () => {
       const message: IncomingWhatsAppMessage = {
         From: testPhone,
+        To: testTo,
         Body: 'Hola',
         MessageSid: 'test-sid',
       };
@@ -54,6 +56,7 @@ describe('WhatsApp Flow Integration Tests', () => {
     it('should create customer and show menu after receiving name', async () => {
       const message: IncomingWhatsAppMessage = {
         From: testPhone,
+        To: testTo,
         Body: 'Juan Pérez',
         MessageSid: 'test-sid',
       };
@@ -121,6 +124,7 @@ describe('WhatsApp Flow Integration Tests', () => {
     it('should start booking flow when user selects option 1', async () => {
       const message: IncomingWhatsAppMessage = {
         From: testPhone,
+        To: testTo,
         Body: '1',
         MessageSid: 'test-sid',
       };
@@ -147,6 +151,7 @@ describe('WhatsApp Flow Integration Tests', () => {
     it('should show appointments when user selects option 3', async () => {
       const message: IncomingWhatsAppMessage = {
         From: testPhone,
+        To: testTo,
         Body: '3',
         MessageSid: 'test-sid',
       };
@@ -200,6 +205,7 @@ describe('WhatsApp Flow Integration Tests', () => {
 
       const message: IncomingWhatsAppMessage = {
         From: testPhone,
+        To: testTo,
         Body: 'Quiero agendar un turno',
         MessageSid: 'test-sid',
       };
@@ -270,6 +276,7 @@ describe('WhatsApp Flow Integration Tests', () => {
 
       const message: IncomingWhatsAppMessage = {
         From: testPhone,
+        To: testTo,
         Body: 'cancelar turno',
         MessageSid: 'test-sid',
       };
@@ -294,6 +301,7 @@ describe('WhatsApp Flow Integration Tests', () => {
     it('should handle service errors gracefully', async () => {
       const message: IncomingWhatsAppMessage = {
         From: testPhone,
+        To: testTo,
         Body: 'Hola',
         MessageSid: 'test-sid',
       };
@@ -327,6 +335,7 @@ describe('WhatsApp Flow Integration Tests', () => {
 
       const message: IncomingWhatsAppMessage = {
         From: testPhone,
+        To: testTo,
         Body: 'inicio',
         MessageSid: 'test-sid',
       };
@@ -354,6 +363,7 @@ describe('WhatsApp Flow Integration Tests', () => {
 
       const message: IncomingWhatsAppMessage = {
         From: testPhone,
+        To: testTo,
         Body: 'ayuda',
         MessageSid: 'test-sid',
       };

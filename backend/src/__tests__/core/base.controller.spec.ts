@@ -276,7 +276,8 @@ describe('BaseController', () => {
 
     it('should return 501 when search not implemented', async () => {
       const controllerWithoutSearch = new TestController();
-      controllerWithoutSearch['service'] = { ...mockService, search: undefined };
+      const { search, ...serviceWithoutSearch } = mockService;
+      controllerWithoutSearch['service'] = serviceWithoutSearch as any;
 
       await controllerWithoutSearch.search(mockReq as Request, mockRes as Response);
 

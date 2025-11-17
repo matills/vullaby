@@ -1,6 +1,6 @@
 import { supabase } from '../config/supabase';
 import { logger } from '../config/logger';
-import { Customer, CreateCustomerInput, UpdateCustomerInput } from '../models';
+import { Customer, CreateCustomerInput } from '../models';
 import { BaseService } from '../core/base.service';
 
 /**

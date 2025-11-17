@@ -40,7 +40,7 @@ class AppointmentService extends BaseService<Appointment> {
       // Set default status to pending
       const appointmentData = {
         ...data,
-        status: data.status || 'pending',
+        status: 'pending' as const, // Always set to pending on create
       };
 
       return await super.create(appointmentData);
@@ -206,13 +206,13 @@ class AppointmentService extends BaseService<Appointment> {
       }
 
       // Map employee data to employee_name for backward compatibility
-      const mappedData = (data || []).map(apt => ({
+      const mappedData = (data || []).map((apt: any) => ({
         ...apt,
         employee_name: apt.employee?.name || null,
         customer_name: apt.customer?.name || null,
       }));
 
-      return mappedData;
+      return mappedData as Appointment[];
     } catch (error) {
       logger.error('Error in queryAppointments:', error);
       throw error;
@@ -285,7 +285,7 @@ class AppointmentService extends BaseService<Appointment> {
   /**
    * Custom method: Get appointment statistics
    */
-  async getStats(businessId: string, startDate?: string, endDate?: string) {
+  async getStats(businessId: string, _startDate?: string, _endDate?: string) {
     try {
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();

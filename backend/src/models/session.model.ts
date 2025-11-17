@@ -3,11 +3,16 @@ import { z } from 'zod';
 export const ConversationStateSchema = z.enum([
   'initial',
   'asking_name',
+  'intent_detected',
+  'collecting_data',
   'selecting_service',
   'selecting_employee',
   'selecting_date',
   'selecting_time',
   'confirming',
+  'cancelling',
+  'confirming_cancellation',
+  'viewing',
   'completed',
   'cancelled'
 ]);
@@ -37,6 +42,10 @@ export const SessionDataSchema = z.object({
   duration: z.number().optional(),
   service_name: z.string().optional(),
   notes: z.string().optional(),
+  collected_data: z.any().optional(),
+  missing_data: z.any().optional(),
+  appointments: z.array(z.any()).optional(),
+  pending_cancellation_id: z.string().optional(),
 });
 
 export const IncomingWhatsAppMessageSchema = z.object({

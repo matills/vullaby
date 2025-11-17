@@ -211,9 +211,10 @@ export abstract class BaseService<T> implements ICrudService<T> {
   /**
    * Generic search method (can be overridden in subclasses for specific search logic)
    */
-  async search(query: string, limit: number = 10): Promise<T[]> {
+  async search(_query: string, limit: number = 10): Promise<T[]> {
     try {
       // Default search implementation - override in subclass for specific search fields
+      // Note: _query parameter is unused in base implementation but required for interface
       const { data, error } = await this.supabase
         .from(this.tableName)
         .select('*')

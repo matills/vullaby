@@ -13,21 +13,32 @@ describe('parseNaturalDate', () => {
 
   it('should parse "hoy" correctly', () => {
     const result = parseNaturalDate('hoy');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     expect(result).toBeInstanceOf(Date);
-    expect(result?.getDate()).toBe(16);
-    expect(result?.getMonth()).toBe(10); // November (0-indexed)
+    expect(result?.getDate()).toBe(today.getDate());
+    expect(result?.getMonth()).toBe(today.getMonth());
   });
 
   it('should parse "mañana" correctly', () => {
     const result = parseNaturalDate('mañana');
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+
     expect(result).toBeInstanceOf(Date);
-    expect(result?.getDate()).toBe(17);
+    expect(result?.getDate()).toBe(tomorrow.getDate());
   });
 
   it('should parse "manana" (without accent) correctly', () => {
     const result = parseNaturalDate('manana');
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+
     expect(result).toBeInstanceOf(Date);
-    expect(result?.getDate()).toBe(17);
+    expect(result?.getDate()).toBe(tomorrow.getDate());
   });
 
   it('should parse weekday names correctly', () => {
@@ -87,26 +98,33 @@ describe('isValidAppointmentDate', () => {
   });
 
   it('should accept today\'s date', () => {
-    const today = new Date('2025-11-16T00:00:00Z');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const result = isValidAppointmentDate(today);
     expect(result.valid).toBe(true);
   });
 
   it('should accept future dates', () => {
-    const future = new Date('2025-11-20T00:00:00Z');
+    const future = new Date();
+    future.setDate(future.getDate() + 5);
+    future.setHours(0, 0, 0, 0);
     const result = isValidAppointmentDate(future);
     expect(result.valid).toBe(true);
   });
 
   it('should reject past dates', () => {
-    const past = new Date('2025-11-15T00:00:00Z');
+    const past = new Date();
+    past.setDate(past.getDate() - 1);
+    past.setHours(0, 0, 0, 0);
     const result = isValidAppointmentDate(past);
     expect(result.valid).toBe(false);
     expect(result.error).toContain('hoy en adelante');
   });
 
   it('should reject dates more than 90 days in future', () => {
-    const farFuture = new Date('2026-03-01T00:00:00Z');
+    const farFuture = new Date();
+    farFuture.setDate(farFuture.getDate() + 100);
+    farFuture.setHours(0, 0, 0, 0);
     const result = isValidAppointmentDate(farFuture);
     expect(result.valid).toBe(false);
     expect(result.error).toContain('90 días');

@@ -46,7 +46,7 @@ export class CancellationHandler {
       // Show appointments to cancel
       let message = '❌ *Cancelar turno*\n\nTus próximos turnos:\n\n';
 
-      upcomingAppointments.forEach((apt, index) => {
+      upcomingAppointments.forEach((apt: any, index) => {
         const date = new Date(apt.start_time);
         const dateStr = date.toLocaleDateString('es', {
           weekday: 'short',

@@ -37,7 +37,6 @@ export class WhatsAppService {
     // Initialize handlers
     this.bookingHandler = new BookingHandler(
       sessionService,
-      customerService,
       employeeService,
       appointmentService,
       availabilityService,
@@ -183,7 +182,7 @@ export class WhatsAppService {
 
       // Check if message is a menu selection (1, 2, 3, 4)
       const menuSelection = this.detectMenuSelection(body);
-      if (menuSelection) {
+      if (menuSelection && existingCustomer.id) {
         await this.handleMenuSelection(phone, menuSelection, existingCustomer.id);
         return;
       }
@@ -193,7 +192,7 @@ export class WhatsAppService {
       logger.info('Detected intent', { phone, intent });
 
       // Route based on intent
-      if (this.intentDetector.isIntentClear(intent)) {
+      if (this.intentDetector.isIntentClear(intent) && existingCustomer.id) {
         await this.routeByIntent(phone, body, intent.type, existingCustomer.id);
       } else {
         // Intent not clear - show welcome menu
@@ -231,11 +230,10 @@ export class WhatsAppService {
         return;
       }
 
-      // Create customer
+      // Create customer (business_id is added automatically by BaseService from request context)
       const customer = await customerService.createCustomer({
         phone,
-        name,
-        business_id: DEFAULT_BUSINESS_ID
+        name
       });
 
       // Store customer data
@@ -307,8 +305,8 @@ export class WhatsAppService {
   /**
    * Handle "talk to someone" request
    */
-  private async handleTalkToSomeone(phone: string, customerId: string): Promise<void> {
-    // TODO: Implement notification to business
+  private async handleTalkToSomeone(phone: string, _customerId: string): Promise<void> {
+    // TODO: Implement notification to business (will use _customerId)
     await this.sendMessage(
       phone,
       '📞 Solicitud recibida.\n\n' +

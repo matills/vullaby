@@ -71,6 +71,9 @@ describe('BaseService', () => {
       const mockId = '123';
       const mockResult = { id: mockId, name: 'Test', business_id: 'test-business-id', created_at: new Date().toISOString() };
 
+      // Mock request context to return undefined (no business_id filtering)
+      jest.spyOn(requestContext, 'getBusinessIdOrUndefined').mockReturnValue(undefined);
+
       (supabase.from as jest.Mock).mockReturnValue({
         select: jest.fn().mockReturnValue({
           eq: jest.fn().mockReturnValue({
@@ -87,23 +90,25 @@ describe('BaseService', () => {
     it('should filter by businessId when context is available', async () => {
       const mockId = '123';
       const businessId = 'context-business-id';
+      const mockResult = { id: mockId, name: 'Test', business_id: businessId, created_at: new Date().toISOString() };
 
       jest.spyOn(requestContext, 'getBusinessIdOrUndefined').mockReturnValue(businessId);
 
-      const eqMock = jest.fn().mockReturnValue({
-        single: jest.fn().mockResolvedValue({ data: null, error: null }),
-      });
+      // Create chainable eq mock
+      const singleMock = jest.fn().mockResolvedValue({ data: mockResult, error: null });
+      const eqChainMock = { eq: jest.fn(), single: singleMock };
+      eqChainMock.eq.mockReturnValue(eqChainMock);
 
       (supabase.from as jest.Mock).mockReturnValue({
         select: jest.fn().mockReturnValue({
-          eq: eqMock,
+          eq: jest.fn().mockReturnValue(eqChainMock),
         }),
       });
 
-      await service.getById(mockId);
+      const result = await service.getById(mockId);
 
-      expect(eqMock).toHaveBeenCalledWith('id', mockId);
-      expect(eqMock).toHaveBeenCalledWith('business_id', businessId);
+      expect(result).toEqual(mockResult);
+      expect(eqChainMock.eq).toHaveBeenCalledWith('business_id', businessId);
     });
   });
 
@@ -113,6 +118,9 @@ describe('BaseService', () => {
         { id: '1', name: 'Test 1', business_id: 'test-business-id', created_at: new Date().toISOString() },
         { id: '2', name: 'Test 2', business_id: 'test-business-id', created_at: new Date().toISOString() },
       ];
+
+      // Mock request context to return undefined (no business_id filtering)
+      jest.spyOn(requestContext, 'getBusinessIdOrUndefined').mockReturnValue(undefined);
 
       (supabase.from as jest.Mock).mockReturnValue({
         select: jest.fn().mockReturnValue({
@@ -133,6 +141,9 @@ describe('BaseService', () => {
       const mockUpdate = { name: 'Updated' };
       const mockExisting = { id: mockId, name: 'Test', business_id: 'test-business-id', created_at: new Date().toISOString() };
       const mockResult = { ...mockExisting, ...mockUpdate };
+
+      // Mock request context to return undefined (no business_id filtering)
+      jest.spyOn(requestContext, 'getBusinessIdOrUndefined').mockReturnValue(undefined);
 
       // Mock getById
       (supabase.from as jest.Mock).mockReturnValueOnce({
@@ -164,6 +175,9 @@ describe('BaseService', () => {
     it('should delete an entity', async () => {
       const mockId = '123';
       const mockExisting = { id: mockId, name: 'Test', business_id: 'test-business-id', created_at: new Date().toISOString() };
+
+      // Mock request context to return undefined (no business_id filtering)
+      jest.spyOn(requestContext, 'getBusinessIdOrUndefined').mockReturnValue(undefined);
 
       // Mock getById
       (supabase.from as jest.Mock).mockReturnValueOnce({

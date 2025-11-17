@@ -1,5 +1,4 @@
 import { SessionService } from '../session.service';
-import { CustomerService } from '../customer.service';
 import { EmployeeService } from '../employee.service';
 import { AppointmentService } from '../appointment.service';
 import { AvailabilityService } from '../availability.service';
@@ -15,7 +14,6 @@ import { BookingData, DataCollectionStep } from './types';
 export class BookingHandler {
   constructor(
     private sessionService: SessionService,
-    private customerService: CustomerService,
     private employeeService: EmployeeService,
     private appointmentService: AppointmentService,
     private availabilityService: AvailabilityService,
@@ -364,7 +362,11 @@ export class BookingHandler {
         date,
         60 // duration in minutes
       );
-      return slots.map(slot => slot.time);
+      // Extract time from start_time (format: HH:MM)
+      return slots.map(slot => {
+        const startTime = new Date(slot.start_time);
+        return `${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')}`;
+      });
     } catch (error) {
       logger.error('Error getting available slots:', error);
       return [];
@@ -534,21 +536,20 @@ export class BookingHandler {
       const endTime = new Date(startTime);
       endTime.setHours(hours + 1, minutes, 0, 0); // Default 1 hour duration
 
-      // Create appointment
+      // Create appointment (status is automatically set to 'pending' by AppointmentService)
       const appointment = await this.appointmentService.createAppointment({
         business_id: businessId,
         customer_id: customerId,
         employee_id: data.employeeId,
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
-        status: 'confirmed'
       });
 
       logger.info('Appointment created successfully', { appointmentId: appointment.id });
 
       // Send confirmation
       const confirmationMessage = MessageFormatter.formatAppointmentConfirmed({
-        id: appointment.id,
+        id: appointment.id!,  // ID is guaranteed to exist after creation
         date: data.date,
         time: data.time,
         employeeName: data.employeeName!
