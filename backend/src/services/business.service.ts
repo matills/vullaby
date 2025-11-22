@@ -161,6 +161,36 @@ class BusinessService extends BaseService<Business> {
   }
 
   /**
+   * Custom method: Get business by WhatsApp phone number
+   * Used for routing incoming WhatsApp messages to the correct business
+   */
+  async getBusinessByWhatsAppPhone(whatsappPhone: string): Promise<Business | null> {
+    try {
+      // Remove whatsapp: prefix if present
+      const cleanPhone = whatsappPhone.replace('whatsapp:', '');
+
+      const { data, error } = await this.supabase
+        .from(this.tableName)
+        .select('*')
+        .eq('whatsapp_phone_number', cleanPhone)
+        .eq('whatsapp_enabled', true)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          return null;
+        }
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      logger.error('Error in getBusinessByWhatsAppPhone:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Custom method: Get all employees for a business
    */
   async getBusinessEmployees(businessId: string) {

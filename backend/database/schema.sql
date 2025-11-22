@@ -15,6 +15,10 @@ CREATE TABLE IF NOT EXISTS businesses (
   industry VARCHAR(100),
   settings JSONB DEFAULT '{}',
   plan VARCHAR(50) DEFAULT 'basic',
+  -- WhatsApp configuration
+  whatsapp_phone_number_id VARCHAR(50),
+  whatsapp_phone_number VARCHAR(20),
+  whatsapp_enabled BOOLEAN DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -22,6 +26,14 @@ CREATE TABLE IF NOT EXISTS businesses (
 COMMENT ON TABLE businesses IS 'Negocios que utilizan el sistema';
 COMMENT ON COLUMN businesses.settings IS 'Configuraciones personalizadas del negocio en formato JSON';
 COMMENT ON COLUMN businesses.plan IS 'Plan de suscripción: basic, pro, enterprise';
+COMMENT ON COLUMN businesses.whatsapp_phone_number_id IS 'Meta WhatsApp Business API Phone Number ID';
+COMMENT ON COLUMN businesses.whatsapp_phone_number IS 'WhatsApp phone number for display';
+COMMENT ON COLUMN businesses.whatsapp_enabled IS 'Whether WhatsApp messaging is enabled';
+
+-- Index for webhook routing
+CREATE INDEX IF NOT EXISTS idx_businesses_whatsapp_phone
+ON businesses(whatsapp_phone_number)
+WHERE whatsapp_phone_number IS NOT NULL;
 
 -- ============================================
 -- TABLE: employees

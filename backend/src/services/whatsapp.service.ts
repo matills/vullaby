@@ -1,11 +1,12 @@
-import { sendWhatsAppMessage } from '../config/twilio';
+import { sendWhatsAppMessage, sendWhatsAppMessageLegacy } from '../config/kapso';
 import { logger } from '../config/logger';
 import { sessionService } from './session.service';
 import { customerService } from './customer.service';
 import { employeeService } from './employee.service';
 import { appointmentService } from './appointment.service';
 import { availabilityService } from './availability.service';
-import { IncomingWhatsAppMessage } from '../models';
+import { businessService } from './business.service';
+import { IncomingWhatsAppMessage, Business } from '../models';
 import { IntentDetector } from './whatsapp/IntentDetector';
 import { DataExtractor } from './whatsapp/DataExtractor';
 import { ValidationService } from './whatsapp/ValidationService';
@@ -14,8 +15,11 @@ import { BookingHandler } from './whatsapp/BookingHandler';
 import { CancellationHandler } from './whatsapp/CancellationHandler';
 import { ViewHandler } from './whatsapp/ViewHandler';
 
-// TODO: Remove this once multi-tenancy is implemented
+// Fallback business ID for development/testing
 const DEFAULT_BUSINESS_ID = process.env.DEFAULT_BUSINESS_ID || '966d6a45-9111-4a42-b618-2f744ebce14a';
+
+// Current business context (set per incoming message)
+let currentBusiness: Business | null = null;
 
 /**
  * WhatsAppService - Main orchestrator for WhatsApp conversation flow
@@ -37,7 +41,6 @@ export class WhatsAppService {
     // Initialize handlers
     this.bookingHandler = new BookingHandler(
       sessionService,
-      customerService,
       employeeService,
       appointmentService,
       availabilityService,
@@ -61,12 +64,19 @@ export class WhatsAppService {
   }
 
   /**
-   * Send WhatsApp message
+   * Send WhatsApp message using the current business's phone number
    */
   async sendMessage(to: string, message: string): Promise<void> {
     try {
-      await sendWhatsAppMessage(to, message);
-      logger.info(`Message sent to ${to}`);
+      if (currentBusiness?.whatsapp_phone_number_id) {
+        // Use business-specific phone number
+        await sendWhatsAppMessage(currentBusiness.whatsapp_phone_number_id, to, message);
+        logger.info(`Message sent to ${to} from business ${currentBusiness.name}`);
+      } else {
+        // Fallback to legacy (default phone number from env)
+        await sendWhatsAppMessageLegacy(to, message);
+        logger.info(`Message sent to ${to} using default number`);
+      }
     } catch (error) {
       logger.error(`Failed to send message to ${to}:`, error);
       throw error;
@@ -74,22 +84,55 @@ export class WhatsAppService {
   }
 
   /**
+   * Set the current business context for message routing
+   */
+  setBusinessContext(business: Business | null): void {
+    currentBusiness = business;
+  }
+
+  /**
+   * Get the current business context
+   */
+  getBusinessContext(): Business | null {
+    return currentBusiness;
+  }
+
+  /**
    * Handle incoming WhatsApp message
    */
   async handleIncomingMessage(message: IncomingWhatsAppMessage): Promise<void> {
     const phone = message.From;
+    const toNumber = message.To;
     const body = message.Body.trim();
 
-    logger.info(`Incoming message from ${phone}: ${body}`);
+    logger.info(`Incoming message from ${phone} to ${toNumber}: ${body}`);
 
     try {
+      // Find the business by the WhatsApp number the message was sent TO
+      const business = await businessService.getBusinessByWhatsAppPhone(toNumber);
+
+      if (!business) {
+        logger.warn(`No business found for WhatsApp number: ${toNumber}`);
+        // Try to continue with default business for backward compatibility
+        const defaultBusiness = await businessService.getById(DEFAULT_BUSINESS_ID);
+        this.setBusinessContext(defaultBusiness);
+      } else {
+        this.setBusinessContext(business);
+        logger.info(`Message routed to business: ${business.name} (${business.id})`);
+      }
+
       // Check for global commands first
       if (await this.handleGlobalCommands(phone, body)) {
         return;
       }
 
-      // Get or create session
+      // Get or create session with business context
       const session = sessionService.getOrCreateSession(phone);
+
+      // Update session with business_id if available
+      if (currentBusiness?.id && !session.data.business_id) {
+        sessionService.updateData(phone, { business_id: currentBusiness.id });
+      }
 
       // Handle based on current state
       switch (session.state) {
@@ -186,7 +229,7 @@ export class WhatsAppService {
       logger.info('Detected intent', { phone, intent });
 
       // Route based on intent
-      if (this.intentDetector.isIntentClear(intent)) {
+      if (this.intentDetector.isIntentClear(intent) && existingCustomer.id) {
         await this.routeByIntent(phone, body, intent.type, existingCustomer.id);
       } else {
         // Intent not clear - show welcome menu
@@ -224,11 +267,10 @@ export class WhatsAppService {
         return;
       }
 
-      // Create customer
+      // Create customer (business_id is added automatically by BaseService from request context)
       const customer = await customerService.createCustomer({
         phone,
         name,
-        business_id: DEFAULT_BUSINESS_ID
       });
 
       // Store customer data
