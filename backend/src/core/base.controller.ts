@@ -1,20 +1,20 @@
 import { Request, Response } from 'express';
-import { ZodSchema } from 'zod';
+import { ZodType } from 'zod';
 import { logger } from '../config/logger';
 
 /**
  * Base controller class that provides generic CRUD operations
  * Eliminates code duplication across all entity controllers
  *
- * @template T - The entity type
+ * @template _T - The entity type (prefixed with _ as it's used for type checking only)
  * @template CreateDTO - The DTO for creating entities
  * @template UpdateDTO - The DTO for updating entities
  */
-export abstract class BaseController<T, CreateDTO, UpdateDTO> {
+export abstract class BaseController<_T, CreateDTO, UpdateDTO> {
   protected abstract entityName: string;
   protected abstract service: any; // TODO: Type this with BaseService<T> interface
-  protected abstract createSchema: ZodSchema<CreateDTO>;
-  protected abstract updateSchema: ZodSchema<UpdateDTO>;
+  protected abstract createSchema: ZodType<CreateDTO>;
+  protected abstract updateSchema: ZodType<UpdateDTO>;
 
   /**
    * Generic create handler
@@ -160,7 +160,7 @@ export abstract class BaseController<T, CreateDTO, UpdateDTO> {
   /**
    * Generic get all handler
    */
-  async getAll(req: Request, res: Response): Promise<void> {
+  async getAll(_req: Request, res: Response): Promise<void> {
     try {
       const result = await this.service.getAll();
 

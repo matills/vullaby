@@ -40,7 +40,7 @@ export class DataExtractor {
     try {
       const date = parseNaturalDate(message);
       logger.debug('Extracted date from message:', { message, date });
-      return date;
+      return date ?? undefined;
     } catch (error) {
       logger.debug('No valid date found in message:', message);
       return undefined;

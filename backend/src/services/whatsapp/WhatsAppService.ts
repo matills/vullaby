@@ -187,7 +187,7 @@ export class WhatsAppService {
 
       // Route based on intent
       if (this.intentDetector.isIntentClear(intent)) {
-        await this.routeByIntent(phone, body, intent.type, existingCustomer.id);
+        await this.routeByIntent(phone, body, intent.type, existingCustomer.id!);
       } else {
         // Intent not clear - show welcome menu
         await this.showWelcomeMenu(phone, existingCustomer.name);

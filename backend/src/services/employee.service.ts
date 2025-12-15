@@ -3,7 +3,6 @@ import { logger } from '../config/logger';
 import {
   Employee,
   CreateEmployeeInput,
-  UpdateEmployeeInput,
   QueryEmployeesInput,
 } from '../models';
 import { BaseService } from '../core/base.service';

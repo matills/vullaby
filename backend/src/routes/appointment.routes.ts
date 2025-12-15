@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { appointmentController } from '../controllers';
 
-const router = Router();
+const router: Router = Router();
 
 
 router.get('/upcoming', appointmentController.getUpcoming);

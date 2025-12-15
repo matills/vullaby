@@ -2,6 +2,7 @@ import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { logger } from './config/logger';
+import { requestContextMiddleware, optionalAuth } from './middlewares';
 
 dotenv.config();
 
@@ -15,6 +16,7 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Health check endpoint (no auth required)
 app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'OK',
@@ -22,6 +24,10 @@ app.get('/health', (_req: Request, res: Response) => {
     service: 'lina-backend'
   });
 });
+
+// Apply optional auth and request context middleware to all API routes
+app.use('/api', optionalAuth);
+app.use('/api', requestContextMiddleware);
 
 import routes from './routes';
 app.use('/api', routes);

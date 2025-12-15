@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { availabilityController } from '../controllers';
 
-const router = Router();
+const router: Router = Router();
 
 
 router.get('/slots', availabilityController.getSlots);

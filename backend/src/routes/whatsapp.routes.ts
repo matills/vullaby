@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { whatsappController } from '../controllers';
 
-const router = Router();
+const router: Router = Router();
 
 
 router.post('/webhook', whatsappController.handleWebhook);

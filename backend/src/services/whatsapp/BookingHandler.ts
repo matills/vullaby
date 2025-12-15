@@ -15,7 +15,7 @@ import { BookingData, DataCollectionStep } from './types';
 export class BookingHandler {
   constructor(
     private sessionService: SessionService,
-    private customerService: CustomerService,
+    private _customerService: CustomerService,
     private employeeService: EmployeeService,
     private appointmentService: AppointmentService,
     private availabilityService: AvailabilityService,
@@ -350,7 +350,10 @@ export class BookingHandler {
         date,
         60 // duration in minutes
       );
-      return slots.map(slot => slot.time);
+      return slots.map(slot => {
+        const d = new Date(slot.start_time);
+        return ;
+      });
     } catch (error) {
       logger.error('Error getting available slots:', error);
       return [];
@@ -527,14 +530,13 @@ export class BookingHandler {
         employee_id: data.employeeId,
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
-        status: 'confirmed'
       });
 
       logger.info('Appointment created successfully', { appointmentId: appointment.id });
 
       // Send confirmation
       const confirmationMessage = MessageFormatter.formatAppointmentConfirmed({
-        id: appointment.id,
+        id: appointment.id!,
         date: data.date,
         time: data.time,
         employeeName: data.employeeName!

@@ -2,10 +2,7 @@ import { supabase } from '../config/supabase';
 import { logger } from '../config/logger';
 import {
   Availability,
-  CreateAvailabilityInput,
-  UpdateAvailabilityInput,
   TimeSlot,
-  GetAvailableSlotsInput,
 } from '../models';
 import { BaseService } from '../core/base.service';
 import { appointmentService } from './appointment.service';
@@ -118,15 +115,26 @@ class AvailabilityService extends BaseService<Availability> {
           });
 
           if (!hasConflict) {
+            // Create datetime strings for start and end
+            const slotStartDate = new Date(date);
+            const [slotStartHours, slotStartMinutes] = slotStart.split(':').map(Number);
+            slotStartDate.setHours(slotStartHours, slotStartMinutes, 0, 0);
+
+            const slotEndDate = new Date(date);
+            const [slotEndHours, slotEndMinutes] = slotEnd.split(':').map(Number);
+            slotEndDate.setHours(slotEndHours, slotEndMinutes, 0, 0);
+
             slots.push({
-              time: slotStart,
+              employee_id: employeeId,
+              start_time: slotStartDate.toISOString(),
+              end_time: slotEndDate.toISOString(),
               available: true,
             });
           }
         }
       }
 
-      return slots.sort((a, b) => a.time.localeCompare(b.time));
+      return slots.sort((a, b) => a.start_time.localeCompare(b.start_time));
     } catch (error) {
       logger.error('Error in getAvailableSlots:', error);
       throw error;

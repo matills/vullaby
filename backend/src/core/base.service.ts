@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { logger } from '../config/logger';
 import { NotFoundError } from './errors';
+import { requestContext } from './request-context';
 
 /**
  * Generic interface for CRUD operations
@@ -17,6 +18,7 @@ export interface ICrudService<T> {
 /**
  * Base service class for Supabase CRUD operations
  * Eliminates code duplication across entity services
+ * Automatically filters by businessId from request context when enableMultiTenancy is true
  *
  * @template T - The entity type
  */
@@ -24,16 +26,40 @@ export abstract class BaseService<T> implements ICrudService<T> {
   protected abstract tableName: string;
   protected abstract entityName: string;
 
+  /**
+   * Enable multi-tenancy filtering by businessId
+   * Set to false for tables that don't have business_id column (e.g., businesses table)
+   */
+  protected enableMultiTenancy: boolean = true;
+
   constructor(protected supabase: SupabaseClient) {}
+
+  /**
+   * Get the current business ID from request context
+   * Returns undefined if context is not available or multi-tenancy is disabled
+   */
+  protected getBusinessId(): string | undefined {
+    if (!this.enableMultiTenancy) {
+      return undefined;
+    }
+
+    return requestContext.getBusinessIdOrUndefined();
+  }
 
   /**
    * Create a new entity
    */
   async create(data: Partial<T>): Promise<T> {
     try {
+      // Add business_id if multi-tenancy is enabled and not already set
+      const businessId = this.getBusinessId();
+      const dataWithBusinessId = businessId && !('business_id' in data)
+        ? { ...data, business_id: businessId }
+        : data;
+
       const { data: result, error } = await this.supabase
         .from(this.tableName)
-        .insert(data)
+        .insert(dataWithBusinessId)
         .select()
         .single();
 
@@ -55,11 +81,18 @@ export abstract class BaseService<T> implements ICrudService<T> {
    */
   async getById(id: string): Promise<T | null> {
     try {
-      const { data, error } = await this.supabase
+      let query = this.supabase
         .from(this.tableName)
         .select('*')
-        .eq('id', id)
-        .single();
+        .eq('id', id);
+
+      // Filter by businessId if multi-tenancy is enabled
+      const businessId = this.getBusinessId();
+      if (businessId) {
+        query = query.eq('business_id', businessId);
+      }
+
+      const { data, error } = await query.single();
 
       if (error) {
         if (error.code === 'PGRST116') {
@@ -115,13 +148,21 @@ export abstract class BaseService<T> implements ICrudService<T> {
    */
   async delete(id: string): Promise<void> {
     try {
-      // First check if entity exists
+      // First check if entity exists (this also validates business_id)
       await this.getById(id);
 
-      const { error } = await this.supabase
+      let query = this.supabase
         .from(this.tableName)
         .delete()
         .eq('id', id);
+
+      // Filter by businessId if multi-tenancy is enabled (extra safety)
+      const businessId = this.getBusinessId();
+      if (businessId) {
+        query = query.eq('business_id', businessId);
+      }
+
+      const { error } = await query;
 
       if (error) {
         logger.error(`Error deleting ${this.entityName}:`, error);
@@ -143,10 +184,17 @@ export abstract class BaseService<T> implements ICrudService<T> {
    */
   async getAll(): Promise<T[]> {
     try {
-      const { data, error } = await this.supabase
+      let query = this.supabase
         .from(this.tableName)
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*');
+
+      // Filter by businessId if multi-tenancy is enabled
+      const businessId = this.getBusinessId();
+      if (businessId) {
+        query = query.eq('business_id', businessId);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
         logger.error(`Error getting all ${this.entityName}s:`, error);
@@ -163,9 +211,10 @@ export abstract class BaseService<T> implements ICrudService<T> {
   /**
    * Generic search method (can be overridden in subclasses for specific search logic)
    */
-  async search(query: string, limit: number = 10): Promise<T[]> {
+  async search(_query: string, limit: number = 10): Promise<T[]> {
     try {
       // Default search implementation - override in subclass for specific search fields
+      // Note: _query parameter is unused in base implementation but required for interface
       const { data, error } = await this.supabase
         .from(this.tableName)
         .select('*')

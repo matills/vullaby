@@ -40,7 +40,7 @@ class AppointmentService extends BaseService<Appointment> {
       // Set default status to pending
       const appointmentData = {
         ...data,
-        status: data.status || 'pending',
+        status: 'pending' as const, // Always set to pending on create
       };
 
       return await super.create(appointmentData);
@@ -162,9 +162,17 @@ class AppointmentService extends BaseService<Appointment> {
   /**
    * Custom method: Query appointments with filters
    */
-  async queryAppointments(filters: QueryAppointmentsInput): Promise<Appointment[]> {
+  async queryAppointments(filters: QueryAppointmentsInput, includeRelations: boolean = false): Promise<Appointment[]> {
     try {
-      let query = this.supabase.from(this.tableName).select('*');
+      const selectQuery = includeRelations
+        ? `
+          *,
+          customer:customers(id, name, phone, email),
+          employee:employees(id, name, phone, email, role)
+        `
+        : '*';
+
+      let query = this.supabase.from(this.tableName).select(selectQuery);
 
       if (filters.business_id) {
         query = query.eq('business_id', filters.business_id);
@@ -197,7 +205,14 @@ class AppointmentService extends BaseService<Appointment> {
         throw error;
       }
 
-      return data || [];
+      // Map employee data to employee_name for backward compatibility
+      const mappedData = (data || []).map((apt: any) => ({
+        ...apt,
+        employee_name: apt.employee?.name || null,
+        customer_name: apt.customer?.name || null,
+      }));
+
+      return mappedData as Appointment[];
     } catch (error) {
       logger.error('Error in queryAppointments:', error);
       throw error;
@@ -225,7 +240,7 @@ class AppointmentService extends BaseService<Appointment> {
   async getAppointmentsByCustomer(customerId: string): Promise<Appointment[]> {
     return this.queryAppointments({
       customer_id: customerId,
-    });
+    }, true); // Include employee and customer relations
   }
 
   /**
@@ -270,7 +285,7 @@ class AppointmentService extends BaseService<Appointment> {
   /**
    * Custom method: Get appointment statistics
    */
-  async getStats(businessId: string, startDate?: string, endDate?: string) {
+  async getStats(businessId: string, _startDate?: string, _endDate?: string) {
     try {
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();

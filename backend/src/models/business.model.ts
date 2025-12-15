@@ -8,6 +8,10 @@ export const BusinessSchema = z.object({
   industry: z.string().optional(),
   settings: z.record(z.any()).optional(),
   plan: z.enum(['basic', 'pro', 'enterprise']).default('basic'),
+  // WhatsApp configuration
+  whatsapp_phone_number_id: z.string().optional(),
+  whatsapp_phone_number: z.string().optional(),
+  whatsapp_enabled: z.boolean().default(false),
   created_at: z.string().datetime().optional(),
   updated_at: z.string().datetime().optional(),
 });
@@ -28,6 +32,10 @@ export const UpdateBusinessSchema = z.object({
   industry: z.string().optional(),
   settings: z.record(z.any()).optional(),
   plan: z.enum(['basic', 'pro', 'enterprise']).optional(),
+  // WhatsApp configuration
+  whatsapp_phone_number_id: z.string().optional(),
+  whatsapp_phone_number: z.string().optional(),
+  whatsapp_enabled: z.boolean().optional(),
 });
 
 export const QueryBusinessesSchema = z.object({

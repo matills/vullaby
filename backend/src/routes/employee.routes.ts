@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { employeeController } from '../controllers';
 
-const router = Router();
+const router: Router = Router();
 
 
 router.get('/search', employeeController.search);

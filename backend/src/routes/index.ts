@@ -8,7 +8,7 @@ import customerRoutes from './customer.routes';
 import employeeRoutes from './employee.routes';
 import whatsappRoutes from './whatsapp.routes';
 
-const router = Router();
+const router: Router = Router();
 
 router.use('/appointments', appointmentRoutes);
 router.use('/availability', availabilityRoutes);
